@@ -9,6 +9,9 @@ _media/
 
 fixtures/
 
+# migrations will be different for different apps, so we don't want to store them
+migrations/
+
 .project
 .pydevproject
 .settings/
