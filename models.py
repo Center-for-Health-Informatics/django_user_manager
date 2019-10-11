@@ -6,7 +6,7 @@ import datetime
 from django.db import models
 from django.contrib.auth import get_user_model
 # from django.contrib.auth.models import AbstractUser
-from main.models import AbstractCustomUser
+from project.abstract_user_model import AbstractCustomUser
 
 
 
