@@ -6,12 +6,13 @@
 # ex. you can have a sibling directory called external_apps, and include it in your project from settings
 
 import sys
+from test.test_decimal import file
 sys.path.append("../external_apps")
 
 # you need to define an abstract user model in project.abstract_user_model.AbstractCustomUser
 # user_manager will use this as the base to create a concrete user model
 
-#--- project.abstract_user_model ----------------------------------------
+#--- project/abstract_user_model.py ----------------------------------------
 
 from django.contrib.auth.models import AbstractUser
 
@@ -32,7 +33,7 @@ path('user_manager/', include( ('user_manager.urls', 'user_manager'), namespace=
 
 INSTALLED_APPS = [
     # ...
-    'user_model',
+    'user_manager',
     # ...
 ]
 
@@ -74,6 +75,30 @@ MIDDLEWARE = [
      'user_manager.middleware.ChiAuthLoginMiddleware',
      # ...
 ]
+
+
+### SETTING UP LOGIN AND LOGOUT LINKS ################################
+
+# you already defined these links in your settings file
+# you can make these links available in your template by adding user manager context processor
+
+TEMPLATES = [
+    {
+        #...
+        'OPTIONS': {
+            'context_processors': [
+                #...
+                'user_manager.context_processors.settings_context_processor',
+            ],
+        },
+    },
+]
+
+# Then use the links like this:
+
+<a class="nav-link" href="{{ LOGIN_URL_FOR_LINK }}">Sign in</a>
+<a class="dropdown-item" href="{{ LOGOUT_URL_FOR_LINK }}">Logout</a>
+
 
 
 
