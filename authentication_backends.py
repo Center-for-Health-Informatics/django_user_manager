@@ -2,7 +2,7 @@ from __future__ import unicode_literals
 
 import requests
 
-from django.conf import settings
+from . import custom_settings as settings
 from django.contrib.auth import get_user_model
 
 class ChiAuthBackend(object):
