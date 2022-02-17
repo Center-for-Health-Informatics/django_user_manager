@@ -1,0 +1,54 @@
+{% extends "core/base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+
+{% block content %}
+
+
+<div class="row justify-content-sm-center vertical-center">
+   <div class="card text-primary mt-5">
+		<h3 class="card-header" style="text-align:center;">UC Center for Health Informatics</h3>
+		<h3 class="card-header" style="text-align:center;">{{ SITE_TITLE }}</h3>
+	   {% if allow_chi_auth_login %}
+			<div class="card-body">
+				<div style="overflow:auto;">
+					<img src="{% static 'main/img/uc_curved_logo.png' %}" alt="UC logo" width="84" height="70" style="padding-right:13px; margin-right:7px;float:left;border-right:1px solid #3e3f3a;">
+					<div style="font-size:1.2em;">
+						<strong>UC faculty, staff and students</strong>
+						<span style="text-transform:none">- sign in with your UC Central credentials</span>
+						<br>
+						<strong>All other users</strong>
+						<span style="text-transform:none">- sign in with your CHI credentials</span>
+					</div>
+				</div>
+			</div>
+	   {% endif %}
+		<div class="card-body">
+		    {% if login_error %}
+		        <div class="alert alert-danger">
+				  	{{ login_error }}
+				</div>
+			{% endif %}
+	        <form action='' method='POST'>
+	        	{% csrf_token %}
+	        	<div class="form-group">
+					<input class="form-control" type='text' name='username' id='user-id' placeholder='username'></input>
+				</div>
+				<div class="form-group">
+					<input class="form-control" type='password' name='password' id='pw' placeholder='password'></input>
+				</div>
+				<div style="text-align:right;">
+					<button type='submit' name='submit' class="btn btn-primary btn-block">Sign in <i class="fa fa-sign-in" aria-hidden="true"></i></button>
+				</div>
+			</form>
+		</div>
+	</div>
+</div>
+
+
+
+	
+	
+
+{% endblock %}
