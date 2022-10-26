@@ -14,7 +14,8 @@ import requests
 
 
 def login_view(request):
-    next_url = request.GET.get('next', '/')
+    default_redirect = getattr(settings, "LOGIN_REDIRECT_URL", "/")
+    next_url = request.GET.get('next', default_redirect)
     
     if request.user.is_authenticated:
         return redirect(next_url)
