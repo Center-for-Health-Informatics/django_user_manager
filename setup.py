@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="user_manager",
-    version="1.0.0",
+    version="1.0.1",
     description="Django app for integrating Django project with CHI_AUTH system",
     url="https://github.com/Center-for-Health-Informatics/django_user_manager",
     author="John Meinken",
