@@ -1,4 +1,3 @@
-
 from django.conf import settings
 
 
@@ -6,10 +5,12 @@ from django.conf import settings
 # this file makes a useful reference for all chiron-specific settings and their default
 # values
 
+
 def get_setting(setting_name, alt):
     if hasattr(settings, setting_name):
         return getattr(settings, setting_name)
     return alt
+
 
 LOGIN_URL_FOR_LINK = get_setting("LOGIN_URL_FOR_LINK", "/user_manager/login")
 LOGOUT_URL_FOR_LINK = get_setting("LOGOUT_URL_FOR_LINK", "/user_manager/logout")
@@ -31,7 +32,3 @@ CHI_AUTH_CHECK_SYSTEMS = get_setting("CHI_AUTH_CHECK_SYSTEMS", "local, ucad")
 
 # if true, locally created users will automatically get accounts in chi-auth
 CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = get_setting("CHI_AUTH_AUTOCREATE_CHI_AUTH_USER", False)
-
-
-
-
