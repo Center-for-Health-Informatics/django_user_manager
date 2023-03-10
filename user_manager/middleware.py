@@ -35,7 +35,7 @@ class ChiAuthLoginMiddleware:
         
     def __call__(self, request):
         username = request.META.get('HTTP_SSO_USERNAME')
-        if username:
+        if username and not username.lower().strip() in ["", "none", "null"]:
             User = get_user_model()
             oUser = User.objects.filter(username=username).first()
             if not oUser:
