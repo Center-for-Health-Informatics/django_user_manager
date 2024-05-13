@@ -1,7 +1,7 @@
 from django.conf import settings
 
 
-# don't edit this directly, each setting can be overridden using the Django settings
+# don’t edit this directly, each setting can be overridden using the Django settings
 # this file makes a useful reference for all chiron-specific settings and their default
 # values
 
@@ -31,4 +31,8 @@ CHI_AUTH_AUTOCREATE_LOCAL_USER = get_setting("CHI_AUTH_AUTOCREATE_LOCAL_USER", F
 CHI_AUTH_CHECK_SYSTEMS = get_setting("CHI_AUTH_CHECK_SYSTEMS", "local, ucad")
 
 # if true, locally created users will automatically get accounts in chi-auth
-CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = get_setting("CHI_AUTH_AUTOCREATE_CHI_AUTH_USER", False)
+CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = get_setting(
+    "CHI_AUTH_AUTOCREATE_CHI_AUTH_USER", False
+)
+
+SITE_TITLE = get_setting("SITE_TITLE", "Django Site")
