@@ -20,9 +20,7 @@ def login_view(request):
         oUser = authenticate(request, username=username, password=password)
 
         if oUser is None:
-            context["login_error"] = (
-                "Login failed. Please reenter your username and password."
-            )
+            context["login_error"] = "Incorrect username or password."
             return render(request, "user_manager/login.html", context)
 
         # regardless of how they authenticated, do a standard login

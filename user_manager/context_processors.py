@@ -15,6 +15,9 @@ def settings_context_processor(request):
     my_dict = {
         "LOGIN_URL_FOR_LINK": custom_settings.LOGIN_URL_FOR_LINK,
         "LOGOUT_URL_FOR_LINK": custom_settings.LOGOUT_URL_FOR_LINK,
+        "UC_PASSWORD_MANAGER_LINK": custom_settings.UC_PASSWORD_MANAGER_LINK,
+        "ACCOUNT_LOOKUP_URL": "{}account_lookup".format(custom_settings.CHI_AUTH_URL),
+        "CONTACT_EMAIL_ADDRESS": custom_settings.CONTACT_EMAIL_ADDRESS,
         "SITE_TITLE": custom_settings.SITE_TITLE,
         "allow_chi_auth_login": allow_chi_auth_login,
     }

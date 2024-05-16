@@ -16,7 +16,7 @@ LOGIN_URL_FOR_LINK = get_setting("LOGIN_URL_FOR_LINK", "/user_manager/login")
 LOGOUT_URL_FOR_LINK = get_setting("LOGOUT_URL_FOR_LINK", "/user_manager/logout")
 
 # if using CHI AUTH, what is the root URL for the system
-CHI_AUTH_URL = get_setting("CHI_AUTH_URL", "https://chi-dev.uc.edu/auth/")
+CHI_AUTH_URL = get_setting("CHI_AUTH_URL", "https://chi.uc.edu/auth/")
 
 # you need to provide an access token if using CHI_Auth
 CHI_AUTH_API_ACCESS_TOKEN = get_setting("CHI_AUTH_API_ACCESS_TOKEN", "")
@@ -35,4 +35,8 @@ CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = get_setting(
     "CHI_AUTH_AUTOCREATE_CHI_AUTH_USER", False
 )
 
-SITE_TITLE = get_setting("SITE_TITLE", "Django Site")
+SITE_TITLE = get_setting("SITE_TITLE", "Center for Health Informatics")
+CONTACT_EMAIL_ADDRESS = get_setting("CONTACT_EMAIL_ADDRESS", "combmichi@uc.edu")
+UC_PASSWORD_MANAGER_LINK = get_setting(
+    "UC_PASSWORD_MANAGER_LINK", "https://www.uc.edu/sspr"
+)
