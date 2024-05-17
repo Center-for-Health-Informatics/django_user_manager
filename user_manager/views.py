@@ -1,6 +1,4 @@
 from django.shortcuts import render, redirect
-# from django.http import HttpResponse, HttpResponseRedirect
-# from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.conf import settings
@@ -22,7 +20,7 @@ def login_view(request):
         oUser = authenticate(request, username=username, password=password)
 
         if oUser is None:
-            context["login_error"] = "Login failed. Please reenter your username and password."
+            context["login_error"] = "Incorrect username or password."
             return render(request, "user_manager/login.html", context)
 
         # regardless of how they authenticated, do a standard login

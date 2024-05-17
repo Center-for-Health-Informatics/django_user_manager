@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="user_manager",
-    version="1.0.1",
+    version="1.1.0",
     description="Django app for integrating Django project with CHI_AUTH system",
     url="https://github.com/Center-for-Health-Informatics/django_user_manager",
     author="John Meinken",
@@ -11,8 +11,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=[
-        "Django >= 2.0",
-        "django-crispy-forms",
+        "Django >= 4.2",
         "requests",
     ],
 )

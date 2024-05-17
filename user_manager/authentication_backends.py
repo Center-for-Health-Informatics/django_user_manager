@@ -6,10 +6,10 @@ from django.contrib.auth import get_user_model
 
 class ChiAuthBackend(object):
     """
-    Authenticates against UC's AD using the API from my SSO application.
+    Authenticates against UC’s AD using the API from my SSO application.
 
     1. If user does not exist here already, they will not be created.
-    2. The API call I'm using is just a proxy for UC's LDAP system.
+    2. The API call I’m using is just a proxy for UC’s LDAP system.
        It only cares if the username/PW matches in LDAP, not how that user is
        defined locally on the SSO site.
     """
@@ -20,7 +20,7 @@ class ChiAuthBackend(object):
         UserModel = get_user_model()
         oUser = UserModel.objects.filter(username=username).first()
 
-        # if no user and we're not autocreating users, can quit here
+        # if no user and we’re not autocreating users, can quit here
         if oUser is None and not settings.CHI_AUTH_AUTOCREATE_LOCAL_USER:
             return None
         # attempt to authenticate
@@ -41,7 +41,7 @@ class ChiAuthBackend(object):
         else:
             authenticated = False
 
-        # if user exists locally and they authenticated, we're good
+        # if user exists locally and they authenticated, we’re good
         if authenticated and oUser:
             return oUser
 
@@ -49,7 +49,7 @@ class ChiAuthBackend(object):
         print(oUser)
         print(settings.CHI_AUTH_AUTOCREATE_LOCAL_USER)
 
-        # if we're autocreating and we authenticated a user that doesn't exist, create them
+        # if we’re autocreating and we authenticated a user that doesn’t exist, create them
         if authenticated and oUser is None and settings.CHI_AUTH_AUTOCREATE_LOCAL_USER:
             oUser = UserModel.objects.create_user(
                 username=response["user"]["username"],
@@ -75,7 +75,7 @@ class ChiAuthBackend(object):
     # this is only here because get_user uses it
     def user_can_authenticate(self, user):
         """
-        Reject users with is_active=False. Custom user models that don't have
+        Reject users with is_active=False. Custom user models that don’t have
         that attribute are allowed.
         """
         is_active = getattr(user, "is_active", None)

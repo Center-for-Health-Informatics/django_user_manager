@@ -56,37 +56,3 @@ class ChiAuthLoginMiddleware:
         # Code to be executed after view
 
         return response
-
-
-# class ChiAuthLoginMiddlewareOld(RemoteUserMiddleware):
-#     """authenticate user using the header HTTTP_UID from OIM"""
-#     header = 'HTTP_SSO_USERNAME'
-#     first_name = 'HTTP_SSO_FIRSTNAME'
-#     last_name = 'HTTP_SSO_LASTNAME'
-#     email = 'HTTP_SSO_EMAIL'
-#
-#     def store_user_info(self, request, user):
-#         if not user.first_name or not user.last_name or not user.email:
-#             # if user did not have a name or email, add it
-#             user.first_name = request.META[self.first_name]
-#             user.last_name = request.META[self.last_name]
-#             user.email = request.META[self.email]
-#             user.save()
-#
-#     def process_request(self, request):
-#         username = ''
-#         if self.header in request.META:
-#             username = request.META[self.header].lower()
-#             request.META[self.header] = username
-#         super(ChiAuthLoginMiddleware, self).process_request(request)
-#         try:
-#             if username:
-#                 User = get_user_model()
-#                 user = User.objects.get(username=username)
-#                 self.store_user_info(request, user)
-#         except ObjectDoesNotExist:
-#             # user did not exist
-#             self._remove_invalid_user(request)
-#         except KeyError:
-#             # if could not find first_name, last_name or email
-#             pass

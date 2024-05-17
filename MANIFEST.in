@@ -1,2 +1,1 @@
 recursive-include user_manager/templates *
-# recursive-include user_manager/management *
