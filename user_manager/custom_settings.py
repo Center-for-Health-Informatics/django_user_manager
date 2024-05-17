@@ -1,15 +1,23 @@
 from django.conf import settings
+from os import getenv
 
 
-# don’t edit this directly, each setting can be overridden using the Django settings
-# this file makes a useful reference for all chiron-specific settings and their default
-# values
+# Don’t edit this directly, each setting can be overridden using the Django settings or
+# process environment.
+# This file makes a useful reference for all chi_auth settings and their default values.
 
 
 def get_setting(setting_name, alt):
     if hasattr(settings, setting_name):
         return getattr(settings, setting_name)
-    return alt
+
+    if (
+        setting_name == "CHI_AUTH_AUTOCREATE_LOCAL_USER"
+        or setting_name == "CHI_AUTH_AUTOCREATE_CHI_AUTH_USER"
+    ):
+        return getenv(setting_name, str(alt)).upper() == "TRUE"
+
+    return getenv(setting_name, alt)
 
 
 LOGIN_URL_FOR_LINK = get_setting("LOGIN_URL_FOR_LINK", "/user_manager/login")
@@ -37,6 +45,6 @@ CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = get_setting(
 
 SITE_TITLE = get_setting("SITE_TITLE", "Center for Health Informatics")
 CONTACT_EMAIL_ADDRESS = get_setting("CONTACT_EMAIL_ADDRESS", "combmichi@uc.edu")
-UC_PASSWORD_MANAGER_LINK = get_setting(
-    "UC_PASSWORD_MANAGER_LINK", "https://www.uc.edu/sspr"
+UC_PASSWORD_MANAGER_URL = get_setting(
+    "UC_PASSWORD_MANAGER_URL", "https://www.uc.edu/sspr"
 )

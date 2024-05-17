@@ -11,8 +11,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=[
-        "Django >= 2.0",
-        "django-crispy-forms",
+        "Django >= 4.2",
         "requests",
     ],
 )

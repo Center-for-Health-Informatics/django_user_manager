@@ -1,12 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 598 269">
-  <title>University of Cincinnati logo</title>
-  <defs>
-    <style>
-      path, rect {
-        stroke-width: 0;
-      }
-    </style>
-  </defs>
+<svg mlns="http://www.w3.org/2000/svg" viewBox="0 0 598 269">
+  <title>University of Cincinnati logotype</title>
+  <defs><style>.text, .graphic {stroke-width: 0;}</style></defs>
   <g class="text">
     <g class="university">
       <path d="m24.14,139.24l.28-1.92,7.04.17,6.43-.17.28,1.92-4.67.71v22.44c0,7.15-2.92,11.93-13.86,14.46-10.83,0-14.68-5.83-14.68-14.57v-22.33l-4.95-.71.27-1.92,7.59.17,7.53-.17.28,1.92-4.67.71v23.15c0,6.82,2.91,10.72,9.18,10.72,5.72,0,8.91-3.85,8.91-10.89v-22.99l-4.95-.71Z"></path>

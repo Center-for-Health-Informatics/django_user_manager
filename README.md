@@ -1,6 +1,8 @@
-# About
+# user_manager
 
-This is a Django app that integrates well with the CHI_AUTH tool (though it doesn’t require the CHI_AUTH tool to use). There are a few possible configurations:
+## About
+
+This is a Django app that integrates well with the [CHI_AUTH](https://github.com/Center-for-Health-Informatics/chi_auth) tool (though it doesn’t require the CHI_AUTH tool to use). There are a few possible configurations:
 
 - normal Django local login
     - not much benefit over normal Django user system
@@ -9,13 +11,13 @@ This is a Django app that integrates well with the CHI_AUTH tool (though it does
 - CHI_AUTH login
     - all login is handled by CHI_AUTH and credentials are passed to this application through nginx as HTTP headers
 
-# Using with django_startup
+## Using with django_startup
 
 I already have a django_startup project template that’s already configured to integrate this. That is the easiest way to get started.
 
 See the django_startup documentation, examples, as well as my obisidian “workflow_deploy_django_project” for how to configure everything.
 
-# Using with a new django project from scratch
+## Using with a new django project from scratch
 
 Download the code from GitHub using pip
 
@@ -72,8 +74,14 @@ Add to urls.py
 path('user_manager/', include( ('user_manager.urls', 'user_manager'), namespace='user_manager') ),
 ```
 
-Customize the behavior of CHI_AUTH
+Customize the behavior of CHI_AUTH. These values can be set in the host project’s `settings.py` or in the process environment.
 ```python
+# if using CHI AUTH, what is the root URL for the system
+CHI_AUTH_URL = "https://chi.uc.edu/auth/"
+
+# you need to provide an access token if using CHI_Auth
+CHI_AUTH_API_ACCESS_TOKEN = "🤫"
+
 # Which CHI_AUTH systems do you want to use for authentication?
 # ucad is UC Active Directory, local is CHI_AUTH credentials for non-UC users
 CHI_AUTH_CHECK_SYSTEMS = 'local, ucad'
@@ -97,3 +105,27 @@ LOGIN_URL_FOR_LINK = '/user_manager/login'
 # use as a sign out link <a href="{{ LOGOUT_URL_FOR_LINK }}">Sign Out</a>
 LOGOUT_URL_FOR_LINK = '/user_manager/logout'
 ```
+
+Customize specifics
+```python
+# what to display for, “Sign in to: _______”
+SITE_TITLE = "Center for Health Informatics"
+
+# who to email for help
+CONTACT_EMAIL_ADDRESS = "combmichi@uc.edu"
+
+# where to change a UC password
+UC_PASSWORD_MANAGER_URL = "https://www.uc.edu/sspr"
+```
+
+## Dependencies
+
+Depends on resources from [CHI Assets](https://chi.uc.edu/assets/) to display its login form. Specifically:
+
+- [favicon.ico](https://chi.uc.edu/assets/favicon.ico)
+- [login.css](https://chi.uc.edu/assets/login.css)
+    - [opensans.css](https://chi.uc.edu/assets/fonts/opensans.css)
+    - [care_crawley.jpg](https://chi.uc.edu/assets/care_crawley.jpg)
+
+
+There are no other external dependencies (*e.g.* Bootstrap, jQuery, Font Awesome, *etc.*). Does not depend on particular templates existing in the host project.
