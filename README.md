@@ -22,12 +22,12 @@ See the django_startup documentation, examples, as well as my obisidian “workf
 Download the code from GitHub using pip
 
 ```shell
-pip install git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v1.1.0#egg=django_user_manager
+pip install git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v1.2.0#egg=django_user_manager
 ```
 
 or add to a `requirements.txt` file
 ```
-git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v1.1.0#egg=django_user_manager
+git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v1.2.0#egg=django_user_manager
 ```
 
 Add `user_manager` app to your installed apps
@@ -112,7 +112,7 @@ Customize specifics
 SITE_TITLE = "Center for Health Informatics"
 
 # who to email for help
-CONTACT_EMAIL_ADDRESS = "combmichi@uc.edu"
+CONTACT_EMAIL = "combmichi@uc.edu"
 
 # where to change a UC password
 UC_PASSWORD_MANAGER_URL = "https://www.uc.edu/sspr"

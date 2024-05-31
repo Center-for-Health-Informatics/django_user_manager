@@ -17,7 +17,7 @@ def settings_context_processor(request):
         "LOGOUT_URL_FOR_LINK": custom_settings.LOGOUT_URL_FOR_LINK,
         "UC_PASSWORD_MANAGER_URL": custom_settings.UC_PASSWORD_MANAGER_URL,
         "ACCOUNT_LOOKUP_URL": "{}account_lookup".format(custom_settings.CHI_AUTH_URL),
-        "CONTACT_EMAIL_ADDRESS": custom_settings.CONTACT_EMAIL_ADDRESS,
+        "CONTACT_EMAIL": custom_settings.CONTACT_EMAIL,
         "SITE_TITLE": custom_settings.SITE_TITLE,
         "allow_chi_auth_login": allow_chi_auth_login,
     }

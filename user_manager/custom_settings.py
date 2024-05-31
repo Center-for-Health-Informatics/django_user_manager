@@ -44,7 +44,7 @@ CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = get_setting(
 )
 
 SITE_TITLE = get_setting("SITE_TITLE", "Center for Health Informatics")
-CONTACT_EMAIL_ADDRESS = get_setting("CONTACT_EMAIL_ADDRESS", "combmichi@uc.edu")
+CONTACT_EMAIL = get_setting("CONTACT_EMAIL", "combmichi@uc.edu")
 UC_PASSWORD_MANAGER_URL = get_setting(
     "UC_PASSWORD_MANAGER_URL", "https://www.uc.edu/sspr"
 )
