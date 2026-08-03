@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "user_manager"
+version = "2.0.0"
+description = "Django app for integrating Django project with CHI_AUTH system"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "John Meinken", email = "meinkejf@ucmail.uc.edu" },
+]
+dependencies = [
+    "Django>=5.2,<7",
+    "requests",
+]
+
+[project.urls]
+Homepage = "https://github.com/Center-for-Health-Informatics/django_user_manager"
+
+[tool.setuptools.packages.find]
+include = ["user_manager*"]
+
+[tool.setuptools.package-data]
+user_manager = ["templates/user_manager/*"]

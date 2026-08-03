@@ -22,12 +22,12 @@ See the django_startup documentation, examples, as well as my obisidian “workf
 Download the code from GitHub using pip
 
 ```shell
-pip install git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v1.2.0#egg=django_user_manager
+pip install git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v2.0.0#egg=django_user_manager
 ```
 
 or add to a `requirements.txt` file
 ```
-git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v1.2.0#egg=django_user_manager
+git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v2.0.0#egg=django_user_manager
 ```
 
 Add `user_manager` app to your installed apps

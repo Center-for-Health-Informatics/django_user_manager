@@ -24,7 +24,4 @@ def save_status_history_after_task_save(sender, instance, created, **kwargs):
         "first_name": instance.first_name,
         "last_name": instance.last_name,
     }
-    r = requests.post(
-        settings.CHI_AUTH_URL + "api/create_user", headers=headers, data=data
-    )
-    print(r.text)
+    requests.post(settings.CHI_AUTH_URL + "api/create_user", headers=headers, data=data)

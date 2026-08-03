@@ -45,10 +45,6 @@ class ChiAuthBackend(object):
         if authenticated and oUser:
             return oUser
 
-        print(authenticated)
-        print(oUser)
-        print(settings.CHI_AUTH_AUTOCREATE_LOCAL_USER)
-
         # if we’re autocreating and we authenticated a user that doesn’t exist, create them
         if authenticated and oUser is None and settings.CHI_AUTH_AUTOCREATE_LOCAL_USER:
             oUser = UserModel.objects.create_user(

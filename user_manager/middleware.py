@@ -14,7 +14,7 @@ class InspectHeadersMiddleware:
         try:
             log_folder = settings.SPECIAL_LOG_FOLDER
         except AttributeError:
-            return
+            return self.get_response(request)
         with open(log_folder + "header_inspection.log", mode="a+") as file_object:
             print("", file=file_object)
             print(datetime.datetime.now(), file=file_object)
