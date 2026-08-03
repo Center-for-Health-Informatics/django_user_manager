@@ -1,1 +1,1 @@
-default_app_config = "user_manager.apps.UserManagerConfig"
+__version__ = "3.0.0"

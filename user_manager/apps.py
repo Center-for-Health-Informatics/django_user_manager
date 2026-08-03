@@ -6,4 +6,5 @@ class UserManagerConfig(AppConfig):
     name = "user_manager"
 
     def ready(self):
-        import user_manager.signals
+        # importing these registers the system checks and connects the post_save receiver
+        from . import checks, signals  # noqa: F401
