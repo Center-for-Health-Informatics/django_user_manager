@@ -11,23 +11,23 @@ This is a Django app that integrates well with the [CHI_AUTH](https://github.com
 - CHI_AUTH login
     - all login is handled by CHI_AUTH and credentials are passed to this application through nginx as HTTP headers
 
-## Using with django_startup
+Supports Django 5.2 and 6.0 on Python 3.10+.
 
-I already have a django_startup project template that’s already configured to integrate this. That is the easiest way to get started.
+Projects using it: daedalus, ocr_importer, monitor, neurords, rap_subsystem, fcc_tracker,
+email_service, covidicus. Daedalus is the most recently updated and is the best worked
+example to copy from.
 
-See the django_startup documentation, examples, as well as my obisidian “workflow_deploy_django_project” for how to configure everything.
+## Setup
 
-## Using with a new django project from scratch
-
-Download the code from GitHub using pip
+Install from GitHub with pip
 
 ```shell
-pip install git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v2.0.0#egg=django_user_manager
+pip install "user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v3.0.0"
 ```
 
 or add to a `requirements.txt` file
 ```
-git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v2.0.0#egg=django_user_manager
+user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v3.0.0
 ```
 
 Add `user_manager` app to your installed apps
@@ -57,8 +57,8 @@ AUTHENTICATION_BACKENDS = [
 ```
 
 Define an abstract user
-- You need to define an abstract user model on path `project.abstract_user_model.AbstractCustomUser`.
-- `user_manager` will use this as the base to create a concrete user model
+- `user_manager` uses this as the base to build its concrete `User` model, so this is where you add any custom fields or methods.
+- By default it is looked for at `project.abstract_user_model.AbstractCustomUser`. Set `USER_MANAGER_ABSTRACT_USER_MODEL` if you want it somewhere else.
 
 ```python
 from django.contrib.auth.models import AbstractUser
@@ -66,15 +66,32 @@ from django.contrib.auth.models import AbstractUser
 class AbstractCustomUser(AbstractUser):
     # add any custom fields or methods you want
 
-    class Meta:       abstract = True
+    class Meta:
+        abstract = True
+```
+
+Register the context processor, so the login page can see `SITE_TITLE`, `CONTACT_EMAIL` and the CHI Auth help links. Without this the login page still renders, but with those values blank.
+
+```python
+TEMPLATES = [
+    {
+        ...
+        "OPTIONS": {
+            "context_processors": [
+                ...
+                "user_manager.context_processors.settings_context_processor",
+            ],
+        },
+    },
+]
 ```
 
 Add to urls.py
 ```python
-path('user_manager/', include( ('user_manager.urls', 'user_manager'), namespace='user_manager') ),
+path('user_manager/', include('user_manager.urls')),
 ```
 
-Customize the behavior of CHI_AUTH. These values can be set in the host project’s `settings.py` or in the process environment.
+Customize the behavior of CHI_AUTH. These values can be set in the host project’s `settings.py` or in the process environment (the Django setting wins).
 ```python
 # if using CHI AUTH, what is the root URL for the system
 CHI_AUTH_URL = "https://chi.uc.edu/auth/"
@@ -91,6 +108,9 @@ CHI_AUTH_AUTOCREATE_LOCAL_USER = True
 
 # new users created locally should automatically generate new user in CHI_AUTH
 CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = False
+
+# seconds to wait on any call out to CHI Auth before giving up and failing the login
+CHI_AUTH_TIMEOUT = 5
 ```
 
 Set login/logout paths
@@ -102,7 +122,7 @@ LOGIN_URL = '/user_manager/login'
 # use as a sign in link <a href="{{ LOGIN_URL_FOR_LINK }}">Sign In</a>
 LOGIN_URL_FOR_LINK = '/user_manager/login'
 
-# use as a sign out link <a href="{{ LOGOUT_URL_FOR_LINK }}">Sign Out</a>
+# post here to sign out — see “Signing out” below
 LOGOUT_URL_FOR_LINK = '/user_manager/logout'
 ```
 
@@ -118,6 +138,127 @@ CONTACT_EMAIL = "combmichi@uc.edu"
 UC_PASSWORD_MANAGER_URL = "https://www.uc.edu/sspr"
 ```
 
+## Migrations
+
+`user_manager` ships **no migrations**, because the shape of its `User` model is decided by
+the abstract base class your project supplies — including any project-specific fields and
+foreign keys — so the migration can’t live in this shared package.
+
+**Every project must set `MIGRATION_MODULES`**, pointing at a package in its own repo:
+
+```python
+MIGRATION_MODULES = {
+    "user_manager": "project.user_manager_migrations",
+}
+```
+
+Create that package (a directory containing an empty `__init__.py`), then run
+`makemigrations user_manager` as normal. The migrations land in your repo and are versioned
+with the rest of your project.
+
+Without this, `user_manager` is an *unmigrated* app: it is silently skipped by
+`makemigrations` autodetection, and its tables only get created by `migrate --run-syncdb`,
+never by a plain `migrate`. Running `makemigrations user_manager` in that state writes the
+files into `site-packages`, where they are lost the next time the virtualenv is rebuilt.
+
+> If your abstract user model has a `ForeignKey` to one of your own apps, the auto-generated
+> initial migration may deadlock: your app’s initial migration has a
+> `swappable_dependency(AUTH_USER_MODEL)` on `user_manager`, so `user_manager` cannot depend
+> on it in turn. Split the FK into a second migration that runs after the target model
+> exists. (Daedalus’ `project/user_manager_migrations/` is a worked example.)
+
+## Signing out
+
+`logout` accepts **POST only**. A GET logout can be triggered by any page that links to it and
+by link prefetchers, which is why Django dropped GET support from its own `LogoutView` in 5.0.
+Use a form rather than a link:
+
+```html
+<form action="{{ LOGOUT_URL_FOR_LINK }}" method="post">
+  {% csrf_token %}
+  <button type="submit">Sign Out</button>
+</form>
+```
+
+## Header based SSO (CHI_AUTH login)
+
+In this mode nginx authenticates the user against CHI Auth and passes their identity to the
+application as `SSO-*` request headers. Add the middleware **after** Django’s
+`AuthenticationMiddleware`:
+
+```python
+MIDDLEWARE = [
+    ...
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "user_manager.middleware.ChiAuthLoginMiddleware",
+    ...
+]
+```
+
+The headers read are `SSO-Username`, `SSO-Email`, `SSO-Firstname` and `SSO-Lastname`. A user
+who doesn’t exist locally is created on first sight, with an unusable password. When there is
+no `SSO-Username` header the middleware does nothing, so ordinary session login keeps working
+alongside it.
+
+> **These headers are trusted.** Anyone who can reach the application server without going
+> through nginx can log in as any user simply by sending `SSO-Username: someone`. Two things
+> must be true:
+>
+> 1. nginx **strips any inbound `SSO-*` headers** before setting its own.
+> 2. The application server is not reachable except through nginx.
+>
+> Set `CHI_AUTH_TRUSTED_PROXIES` and the middleware will enforce (2) itself, ignoring the
+> headers on requests that came from anywhere else. `manage.py check` emits
+> `user_manager.W001` while it is unset.
+
+```python
+# IPs or CIDR ranges of your nginx server(s)
+CHI_AUTH_TRUSTED_PROXIES = ["10.0.0.1", "10.1.0.0/24"]
+```
+
+nginx side, in outline:
+
+```nginx
+location / {
+    # set every SSO-* header explicitly, so nothing the client sent survives
+    proxy_set_header SSO-Username  $sso_username;
+    proxy_set_header SSO-Email     $sso_email;
+    proxy_set_header SSO-Firstname $sso_firstname;
+    proxy_set_header SSO-Lastname  $sso_lastname;
+    proxy_pass http://app;
+}
+```
+
+### Debugging headers
+
+`user_manager.middleware.InspectHeadersMiddleware` appends the headers of every request to
+`header_inspection.log` in `SPECIAL_LOG_FOLDER`, which is useful while getting the nginx
+configuration right. Credentials are redacted, but the log still records who visited what —
+**it is a debugging aid, not something to leave enabled in production.** It does nothing
+unless `SPECIAL_LOG_FOLDER` is set, and `manage.py check` warns (`user_manager.W002`) if it
+is active outside `DEBUG`.
+
+```python
+MIDDLEWARE = [..., "user_manager.middleware.InspectHeadersMiddleware"]
+SPECIAL_LOG_FOLDER = "/var/log/myproject/"
+```
+
+## Upgrading from 2.x to 3.0
+
+- **`logout` is POST only.** Replace any `<a href="{{ LOGOUT_URL_FOR_LINK }}">` with the form
+  shown above. This is the only change most projects need.
+- **URL names are namespaced by the app.** `user_manager/urls.py` now sets
+  `app_name = "user_manager"`, so `include()` no longer needs the two-tuple form.
+  `{% url 'user_manager:login' %}` continues to work.
+- **The abstract user model path is now a setting.** The default is unchanged
+  (`project.abstract_user_model.AbstractCustomUser`), so existing projects need no edit.
+- **Users created through the admin and through SSO now get an unusable password** rather
+  than an empty one. Set a password on the change form if a local login is wanted.
+- **Inactive users are refused by `ChiAuthBackend` and by the SSO middleware.** Previously
+  `is_active = False` only blocked local password login. If you were relying on that, note
+  that deactivating an account now locks it out completely.
+- Add `CHI_AUTH_TRUSTED_PROXIES` if you use header based SSO; see above.
+
 ## Dependencies
 
 Depends on resources from [CHI Assets](https://chi.uc.edu/assets/) to display its login form. Specifically:
@@ -129,3 +270,14 @@ Depends on resources from [CHI Assets](https://chi.uc.edu/assets/) to display it
 
 
 There are no other external dependencies (*e.g.* Bootstrap, jQuery, Font Awesome, *etc.*). Does not depend on particular templates existing in the host project.
+
+## Development
+
+The test suite runs standalone, without a host project:
+
+```shell
+pip install -e . ruff
+python runtests.py                     # everything
+python runtests.py tests.test_views    # one module
+ruff check . && ruff format --check .
+```

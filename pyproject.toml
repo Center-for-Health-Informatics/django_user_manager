@@ -1,15 +1,36 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "user_manager"
-version = "2.0.0"
+dynamic = ["version"]
 description = "Django app for integrating Django project with CHI_AUTH system"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
+# not open source; LicenseRef-* is how PEP 639 spells a private/custom license
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
 authors = [
     { name = "John Meinken", email = "meinkejf@ucmail.uc.edu" },
+    { name = "Rob Ireton", email = "iretonrt@ucmail.uc.edu" },
+]
+classifiers = [
+    # deliberately invalid, so an accidental `twine upload` is rejected by PyPI
+    "Private :: Do Not Upload",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 dependencies = [
     "Django>=5.2,<7",
@@ -19,8 +40,25 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/Center-for-Health-Informatics/django_user_manager"
 
+[tool.setuptools.dynamic]
+version = { attr = "user_manager.__version__" }
+
 [tool.setuptools.packages.find]
 include = ["user_manager*"]
 
 [tool.setuptools.package-data]
-user_manager = ["templates/user_manager/*"]
+user_manager = ["templates/**/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# the README's code blocks are illustrative fragments, not code to be formatted
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+# E/F pyflakes+pycodestyle, I import order, UP pyupgrade, B bugbear, DJ django, S bandit
+select = ["E", "F", "I", "UP", "B", "DJ", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is how tests are written; hard-coded passwords are the point of an auth test suite
+"tests/*" = ["S101", "S105", "S106"]
