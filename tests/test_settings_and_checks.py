@@ -107,6 +107,24 @@ class ChecksTests(SimpleTestCase):
         ids = self.ids(MIDDLEWARE=SSO_MIDDLEWARE, CHI_AUTH_USE_MIDDLEWARE=True)
         self.assertFalse({"user_manager.W004", "user_manager.W005"} & ids)
 
+    def test_warns_when_logout_redirect_url_still_names_chi_auth(self):
+        ids = self.ids(
+            MIDDLEWARE=SSO_MIDDLEWARE,
+            CHI_AUTH_USE_MIDDLEWARE=True,
+            CHI_AUTH_URL="https://chi-tools.uc.edu/auth/",
+            LOGOUT_REDIRECT_URL="/auth/logout?uri=/my_app/",
+        )
+        self.assertIn("user_manager.W006", ids)
+
+    def test_no_logout_redirect_warning_for_a_local_destination(self):
+        ids = self.ids(
+            MIDDLEWARE=SSO_MIDDLEWARE,
+            CHI_AUTH_USE_MIDDLEWARE=True,
+            CHI_AUTH_URL="https://chi-tools.uc.edu/auth/",
+            LOGOUT_REDIRECT_URL="/my_app/",
+        )
+        self.assertNotIn("user_manager.W006", ids)
+
     def test_warns_about_the_header_inspection_log_outside_debug(self):
         ids = self.ids(
             MIDDLEWARE=["user_manager.middleware.InspectHeadersMiddleware"],

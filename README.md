@@ -219,14 +219,31 @@ So `LOGIN_URL` and `LOGIN_URL_FOR_LINK` stay pointed at `/user_manager/login` in
 and `@login_required` keeps its destination across the round trip — CHI Auth reads `uri`, not
 Django’s `next`, and this is what translates between them.
 
-Signing out runs the other way round, and that asymmetry is deliberate: `logout` clears the
-local session first (POST, same-origin, CSRF intact), then `LOGOUT_REDIRECT_URL` chains on to
-CHI Auth’s own logout to drop the upstream session. Without that second hop the `SSO-*`
-headers simply sign the user back in on their next request.
+### Signing out under header SSO
+
+Signing out crosses the same two sessions in the opposite order, and that asymmetry is
+deliberate: `logout_view` clears the local session **first** — POST, same-origin, CSRF
+intact, none of which a cross-app POST to CHI Auth’s GET-only logout could manage — and
+then chains on to `CHI_AUTH_URL + "logout"` to drop the upstream session. Without that
+second hop the `SSO-*` headers sign the user straight back in on their next request, which
+looks like a broken sign-out button rather than a misconfiguration.
+
+The chaining is automatic as of 3.1.0, so `LOGOUT_REDIRECT_URL` means the same thing in
+both modes — where the user should land **on this site** once signed out — and gets handed
+to CHI Auth as its `uri`:
 
 ```python
-LOGOUT_REDIRECT_URL = "/auth/logout?uri=/my_app/"
+LOGOUT_REDIRECT_URL = "/my_app/"
 ```
+
+> Projects upgrading from 3.0 will have CHI Auth’s logout written into that setting by
+> hand, since nothing chained there for them. Such a value is honoured as-is rather than
+> wrapped — sign-out keeps working — but the user is left on CHI Auth instead of back on
+> your site, and `manage.py check` reports `user_manager.W006` until it is replaced with a
+> local path.
+
+Between this and the login handoff, no application needs to write a CHI Auth URL anywhere:
+`CHI_AUTH_URL`, `CHI_AUTH_USE_MIDDLEWARE` and your own script prefix determine all of them.
 
 A local superuser who is not in CHI Auth can still reach Django’s admin login at
 `/admin/login/`, which is unaffected by any of this.
@@ -286,6 +303,11 @@ SPECIAL_LOG_FOLDER = "/var/log/myproject/"
   straight at CHI Auth to work around that can point them back at `/user_manager/login` and
   drop the hard-coded URL; `@login_required` then keeps its destination across the round
   trip, which it could not before — Django sends `?next=`, and CHI Auth reads `uri`.
+- **`logout_view` chains on to CHI Auth’s logout by itself** in the same mode, so
+  `LOGOUT_REDIRECT_URL` should become a path on your own site — where the user lands once
+  signed out — rather than the `/auth/logout?uri=…` every project had to write by hand. The
+  old form is honoured rather than wrapped, so sign-out does not break on upgrade;
+  `user_manager.W006` reports it until it is replaced.
 - **`CHI_AUTH_USE_MIDDLEWARE` is now a `user_manager` setting**, read like every other one
   (Django setting, then environment, then default `False`). Projects already setting it from
   the environment need no edit. `manage.py check` reports `user_manager.W004` / `W005` if it

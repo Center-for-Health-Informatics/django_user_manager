@@ -142,3 +142,36 @@ class LogoutViewTests(TestCase):
         self.client.logout()
         response = self.client.post(LOGOUT_URL)
         self.assertRedirects(response, "/goodbye/", fetch_redirect_response=False)
+
+
+@override_settings(CHI_AUTH_USE_MIDDLEWARE=True, CHI_AUTH_URL="https://chi-tools.uc.edu/auth/")
+class LogoutViewUnderHeaderSsoTests(TestCase):
+    """Clearing the local session is only half of signing out: the SSO-* headers sign the
+    user straight back in on their next request unless CHI Auth's session goes too."""
+
+    CHI_AUTH_LOGOUT = "https://chi-tools.uc.edu/auth/logout"
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ada", password="hunter2")
+        self.client.force_login(self.user)
+
+    def test_the_local_session_is_cleared_before_the_handoff(self):
+        response = self.client.post(LOGOUT_URL)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri=%2Fgoodbye%2F")
+
+    def test_offsite_next_is_still_rejected(self):
+        response = self.client.post(LOGOUT_URL, {"next": "https://evil.example/"})
+        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri=%2Fgoodbye%2F")
+
+    @override_settings(LOGOUT_REDIRECT_URL="/auth/logout?uri=/my_app/")
+    def test_a_pre_3_1_setting_is_honoured_rather_than_wrapped(self):
+        """Every project had to write this by hand before logout_view chained on its own.
+        Wrapping it would send the browser to /auth/logout?uri=/auth/logout?uri=/my_app/."""
+        response = self.client.post(LOGOUT_URL)
+        self.assertEqual(response["Location"], "/auth/logout?uri=/my_app/")
+
+    @override_settings(LOGOUT_REDIRECT_URL="https://chi-tools.uc.edu/auth/logout?uri=/my_app/")
+    def test_the_absolute_form_of_that_setting_is_recognised_too(self):
+        response = self.client.post(LOGOUT_URL)
+        self.assertEqual(response["Location"], "https://chi-tools.uc.edu/auth/logout?uri=/my_app/")
