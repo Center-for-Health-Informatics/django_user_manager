@@ -81,18 +81,25 @@ class LoginViewUnderHeaderSsoTests(TestCase):
     def test_get_redirects_to_chi_auth_instead_of_rendering_the_form(self):
         response = self.client.get(LOGIN_URL)
         self.assertRedirects(
-            response, f"{self.CHI_AUTH_LOGIN}?uri=%2Fdashboard%2F", fetch_redirect_response=False
+            response, f"{self.CHI_AUTH_LOGIN}?uri=/dashboard/", fetch_redirect_response=False
         )
 
     def test_next_is_carried_through_as_uri(self):
         response = self.client.get(LOGIN_URL + "?next=/reports/2")
         self.assertRedirects(
-            response, f"{self.CHI_AUTH_LOGIN}?uri=%2Freports%2F2", fetch_redirect_response=False
+            response, f"{self.CHI_AUTH_LOGIN}?uri=/reports/2", fetch_redirect_response=False
         )
 
-    def test_uri_is_last_and_fully_quoted(self):
-        """CHI Auth reads ‘uri’ from the raw query string to the end, so a destination
-        with a query string of its own must not be able to read as more parameters."""
+    def test_a_plain_path_stays_readable(self):
+        """The form nginx itself sends, and the only one a person can retype. Encoding
+        every slash turns a 404 on this URL into something nobody can recover from."""
+        response = self.client.get(LOGIN_URL + "?next=/email_service/logs/3")
+        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGIN}?uri=/email_service/logs/3")
+
+    def test_a_destination_with_a_query_string_is_quoted(self):
+        """CHI Auth reads ‘uri’ from the raw query string to the end, so this arrives
+        intact either way — but raw, the destination it redirects to gets re-parsed
+        further down, and a crafted next could smuggle a second ‘uri’ to that hop."""
         response = self.client.get(LOGIN_URL + "?next=/logs%3Fpage%3D2%26uri%3D/evil")
         self.assertEqual(
             response["Location"],
@@ -102,7 +109,7 @@ class LoginViewUnderHeaderSsoTests(TestCase):
     def test_offsite_next_is_still_rejected(self):
         response = self.client.get(LOGIN_URL + "?next=https://evil.example/")
         self.assertRedirects(
-            response, f"{self.CHI_AUTH_LOGIN}?uri=%2Fdashboard%2F", fetch_redirect_response=False
+            response, f"{self.CHI_AUTH_LOGIN}?uri=/dashboard/", fetch_redirect_response=False
         )
 
     def test_no_password_is_accepted_here(self):
@@ -208,7 +215,7 @@ class OffsiteNextTests(TestCase):
                 response = self.client.post(LOGOUT_URL, {"next": nxt})
                 self.assertEqual(
                     response["Location"],
-                    "https://chi-tools.uc.edu/auth/logout?uri=%2Fgoodbye%2F",
+                    "https://chi-tools.uc.edu/auth/logout?uri=/goodbye/",
                 )
 
     def test_a_same_site_path_that_merely_looks_hostile_is_still_honoured(self):
@@ -265,11 +272,11 @@ class LogoutViewUnderHeaderSsoTests(TestCase):
     def test_the_local_session_is_cleared_before_the_handoff(self):
         response = self.client.post(LOGOUT_URL)
         self.assertNotIn("_auth_user_id", self.client.session)
-        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri=%2Fgoodbye%2F")
+        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri=/goodbye/")
 
     def test_offsite_next_is_still_rejected(self):
         response = self.client.post(LOGOUT_URL, {"next": "https://evil.example/"})
-        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri=%2Fgoodbye%2F")
+        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri=/goodbye/")
 
     @override_settings(LOGOUT_REDIRECT_URL="/auth/logout?uri=/my_app/")
     def test_a_pre_3_1_setting_is_honoured_rather_than_wrapped(self):

@@ -42,18 +42,25 @@ def chi_auth_url(view_name, destination):
 
     ‘uri’, not ‘next’: CHI Auth reads it straight out of the raw query string, taking
     everything from ``uri=`` to the end as the value, because nginx sends
-    ``/auth/login?uri=$request_uri`` and cannot percent-encode a variable. Two rules
-    follow, and both are the caller's to keep — CHI Auth cannot check either:
+    ``/auth/login?uri=$request_uri`` and cannot percent-encode a variable. So nothing may
+    follow ‘uri’ — it is built last here, and this returns a finished URL rather than
+    something to append to.
 
-    * nothing may come after ‘uri’ in the query string, so it is built last here and
-      this function returns a finished URL rather than something to append to;
-    * a value starting with "/" is taken verbatim, anything else is unquoted once.
-      Quoting the separators too keeps the destination a single opaque parameter, so
-      a query string of its own cannot read as more parameters of ours.
+    CHI Auth then reads the value one of two ways, and this picks between them:
+
+    * a plain path goes **raw**, the form nginx itself sends and the one CHI Auth takes
+      verbatim. It is also the only readable form: percent-encoding every slash turns a
+      404 on this URL into something nobody can retype.
+    * anything carrying its own query string is **quoted**, which CHI Auth unquotes once.
+      Raw, its ‘?’ and ‘&’ would still arrive intact — but the destination CHI Auth
+      redirects to would then be re-parsed further down, and a crafted ``next`` could use
+      that to smuggle a second ‘uri’ to the next hop. Quoted, it stays one opaque value.
 
     CHI Auth re-checks the result against its own resource list either way.
     """
-    return f"{custom_settings.CHI_AUTH_URL}{view_name}?uri={quote(destination, safe='')}"
+    plain_path = destination.startswith("/") and not set("?&%") & set(destination)
+    value = destination if plain_path else quote(destination, safe="")
+    return f"{custom_settings.CHI_AUTH_URL}{view_name}?uri={value}"
 
 
 def chi_auth_login_url(destination):
