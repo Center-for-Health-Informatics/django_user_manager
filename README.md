@@ -262,9 +262,12 @@ Same-site paths are honoured even when they look hostile — `/redirect?url=http
 path on your own host, and rejecting it would break ordinary links. If your app has an
 open redirect at that path, that is the thing to fix.
 
-Under header SSO the destination is handed to CHI Auth as its `uri`, fully quoted, so the
-handoff cannot be used to launder a destination past the check: CHI Auth reads the whole
-value as one opaque path, and re-checks it besides.
+Under header SSO the destination is handed to CHI Auth as its `uri`. A plain path goes
+raw — the form nginx itself sends, and the only one a person can read or retype when
+something goes wrong with it. A destination carrying its own query string is percent-
+encoded instead: it would arrive intact either way, but raw, the destination CHI Auth
+redirects to gets re-parsed further down, and a crafted `next` could use that to smuggle
+a second `uri` to the next hop. CHI Auth re-checks the result regardless.
 
 Between this and the login handoff, no application needs to write a CHI Auth URL anywhere:
 `CHI_AUTH_URL`, `CHI_AUTH_USE_MIDDLEWARE` and your own script prefix determine all of them.
@@ -319,6 +322,12 @@ is active outside `DEBUG`.
 MIDDLEWARE = [..., "user_manager.middleware.InspectHeadersMiddleware"]
 SPECIAL_LOG_FOLDER = "/var/log/myproject/"
 ```
+
+## Upgrading from 3.1.1 to 3.1.2
+
+- **A plain path is no longer percent-encoded into the `uri` parameter.** `?uri=/my_app/`
+  rather than `?uri=%2Fmy_app%2F` — the form nginx sends, and one a person can retype.
+  Destinations carrying a query string are still encoded; see “Redirect safety”.
 
 ## Upgrading from 3.1.0 to 3.1.1
 
