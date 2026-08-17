@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import redirect, render
@@ -5,6 +7,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
+
+from . import custom_settings
 
 
 def _safe_redirect_url(request, url, fallback_setting):
@@ -22,6 +26,25 @@ def _safe_redirect_url(request, url, fallback_setting):
     return getattr(settings, fallback_setting, None) or "/"
 
 
+def chi_auth_login_url(destination):
+    """Build CHI Auth's sign-in URL, carrying ``destination`` as the ‘uri’ parameter.
+
+    ‘uri’, not ‘next’: CHI Auth reads it straight out of the raw query string, taking
+    everything from ``uri=`` to the end as the value, because nginx sends
+    ``/auth/login?uri=$request_uri`` and cannot percent-encode a variable. Two rules
+    follow, and both are the caller's to keep — CHI Auth cannot check either:
+
+    * nothing may come after ‘uri’ in the query string, so it is built last here and
+      this function returns a finished URL rather than something to append to;
+    * a value starting with "/" is taken verbatim, anything else is unquoted once.
+      Quoting the separators too keeps the destination a single opaque parameter, so
+      a query string of its own cannot read as more parameters of ours.
+
+    CHI Auth re-checks the result against its own resource list either way.
+    """
+    return f"{custom_settings.CHI_AUTH_URL}login?uri={quote(destination, safe='')}"
+
+
 @never_cache
 @csrf_protect
 def login_view(request):
@@ -29,6 +52,16 @@ def login_view(request):
 
     if request.user.is_authenticated:
         return redirect(next_url)
+
+    # Under header SSO this view cannot sign anyone in. ChiAuthLoginMiddleware only ever
+    # derives a local session from the SSO-* headers, and only CHI Auth can mint the
+    # upstream session those headers describe — so the browser has to go there. Rendering
+    # the form instead would collect an AD password this app has no reason to see and
+    # hand back a local session with no upstream session behind it: single sign-on
+    # defeated, and a sign-out that has nothing upstream to chain to.
+    if custom_settings.CHI_AUTH_USE_MIDDLEWARE:
+        return redirect(chi_auth_login_url(next_url))
+
     context = {
         "current_page": "login",
         "next": next_url,

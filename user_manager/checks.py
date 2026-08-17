@@ -69,6 +69,34 @@ def check_chi_auth_middleware(app_configs, **kwargs):
                 )
             )
 
+    # CHI_AUTH_USE_MIDDLEWARE is what login_view reads to decide whether to collect a
+    # password itself or hand off to CHI Auth; MIDDLEWARE is what actually installs the
+    # middleware. A project sets both, and nothing ties them together — so say something
+    # when they disagree, in either direction.
+    if custom_settings.CHI_AUTH_USE_MIDDLEWARE and CHI_AUTH_MIDDLEWARE not in middleware:
+        errors.append(
+            Warning(
+                f"CHI_AUTH_USE_MIDDLEWARE is on but {CHI_AUTH_MIDDLEWARE} is not in "
+                f"MIDDLEWARE. The login view hands off to CHI Auth, but nothing reads the "
+                f"SSO-* headers the browser comes back with, so nobody can sign in.",
+                hint=f"Add {CHI_AUTH_MIDDLEWARE} to MIDDLEWARE after {AUTH_MIDDLEWARE}, or "
+                "turn CHI_AUTH_USE_MIDDLEWARE off.",
+                id="user_manager.W004",
+            )
+        )
+    elif CHI_AUTH_MIDDLEWARE in middleware and not custom_settings.CHI_AUTH_USE_MIDDLEWARE:
+        errors.append(
+            Warning(
+                f"{CHI_AUTH_MIDDLEWARE} is in MIDDLEWARE but CHI_AUTH_USE_MIDDLEWARE is "
+                f"off, so the login view collects a password of its own instead of handing "
+                f"off to CHI Auth. That login leaves no upstream session for logout to "
+                f"chain to.",
+                hint="Set CHI_AUTH_USE_MIDDLEWARE=True, unless the local login form is "
+                "deliberately offered alongside header SSO.",
+                id="user_manager.W005",
+            )
+        )
+
     if INSPECT_MIDDLEWARE in middleware and getattr(settings, "SPECIAL_LOG_FOLDER", None):
         if not settings.DEBUG:
             errors.append(

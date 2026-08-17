@@ -113,8 +113,10 @@ CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = False
 CHI_AUTH_TIMEOUT = 5
 ```
 
-Set login/logout paths
-- this example is for local login, you could also configure it to use the CHI_AUTH login views
+Set login/logout paths. These are the same in both modes — under header SSO the login view
+redirects to CHI Auth rather than rendering its own form, so nothing here has to change and
+nothing has to hard-code CHI Auth’s URL. See “Header based SSO” below.
+
 ```python
 # this url gets called when @login_required view is accessed
 LOGIN_URL = '/user_manager/login'
@@ -125,6 +127,8 @@ LOGIN_URL_FOR_LINK = '/user_manager/login'
 # post here to sign out — see “Signing out” below
 LOGOUT_URL_FOR_LINK = '/user_manager/logout'
 ```
+
+Prefix all three with your `FORCE_SCRIPT_NAME` if the app is served under a sub-path.
 
 Customize specifics
 ```python
@@ -193,7 +197,39 @@ MIDDLEWARE = [
     "user_manager.middleware.ChiAuthLoginMiddleware",
     ...
 ]
+
+# tells the login view it is in this mode; MIDDLEWARE alone is not visible to it
+CHI_AUTH_USE_MIDDLEWARE = True
 ```
+
+`manage.py check` warns if those two disagree — `user_manager.W004` when the setting is on
+without the middleware, `user_manager.W005` when the middleware is installed without the
+setting.
+
+### Signing in under header SSO
+
+`login_view` cannot sign anyone in in this mode. The middleware only ever *derives* a local
+session from the `SSO-*` headers, and only CHI Auth can mint the upstream session those
+headers describe — so with `CHI_AUTH_USE_MIDDLEWARE = True` the view redirects to
+`CHI_AUTH_URL + "login"`, carrying wherever the user was heading as CHI Auth’s `uri`
+parameter. Rendering the local form instead would collect an AD password the application
+has no reason to see, and produce a local session with no upstream session behind it.
+
+So `LOGIN_URL` and `LOGIN_URL_FOR_LINK` stay pointed at `/user_manager/login` in both modes,
+and `@login_required` keeps its destination across the round trip — CHI Auth reads `uri`, not
+Django’s `next`, and this is what translates between them.
+
+Signing out runs the other way round, and that asymmetry is deliberate: `logout` clears the
+local session first (POST, same-origin, CSRF intact), then `LOGOUT_REDIRECT_URL` chains on to
+CHI Auth’s own logout to drop the upstream session. Without that second hop the `SSO-*`
+headers simply sign the user back in on their next request.
+
+```python
+LOGOUT_REDIRECT_URL = "/auth/logout?uri=/my_app/"
+```
+
+A local superuser who is not in CHI Auth can still reach Django’s admin login at
+`/admin/login/`, which is unaffected by any of this.
 
 The headers read are `SSO-Username`, `SSO-Email`, `SSO-Firstname` and `SSO-Lastname`. A user
 who doesn’t exist locally is created on first sight, with an unusable password. When there is
@@ -242,6 +278,18 @@ is active outside `DEBUG`.
 MIDDLEWARE = [..., "user_manager.middleware.InspectHeadersMiddleware"]
 SPECIAL_LOG_FOLDER = "/var/log/myproject/"
 ```
+
+## Upgrading from 3.0 to 3.1
+
+- **`login_view` redirects to CHI Auth when `CHI_AUTH_USE_MIDDLEWARE` is on**, instead of
+  rendering its own form. Projects that had pointed `LOGIN_URL` / `LOGIN_URL_FOR_LINK`
+  straight at CHI Auth to work around that can point them back at `/user_manager/login` and
+  drop the hard-coded URL; `@login_required` then keeps its destination across the round
+  trip, which it could not before — Django sends `?next=`, and CHI Auth reads `uri`.
+- **`CHI_AUTH_USE_MIDDLEWARE` is now a `user_manager` setting**, read like every other one
+  (Django setting, then environment, then default `False`). Projects already setting it from
+  the environment need no edit. `manage.py check` reports `user_manager.W004` / `W005` if it
+  disagrees with what is actually in `MIDDLEWARE`.
 
 ## Upgrading from 2.x to 3.0
 

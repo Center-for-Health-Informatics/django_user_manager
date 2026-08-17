@@ -46,6 +46,11 @@ DEFAULTS = {
     "CHI_AUTH_CHECK_SYSTEMS": "local, ucad",
     # if true, locally created users will automatically get accounts in chi-auth
     "CHI_AUTH_AUTOCREATE_CHI_AUTH_USER": False,
+    # is header SSO in use — an upstream nginx authenticating against CHI Auth and passing
+    # identity as SSO-* headers for ChiAuthLoginMiddleware to read? The project is what
+    # installs the middleware; this is how the rest of the package knows it did. login_view
+    # reads it to decide whether to collect a password itself or hand off to CHI Auth.
+    "CHI_AUTH_USE_MIDDLEWARE": False,
     # addresses (IPs or CIDR ranges) of the nginx servers allowed to set the SSO-* headers that
     # ChiAuthLoginMiddleware reads. Empty means “trust every client”, which is only safe if the
     # app server cannot be reached except through that nginx — see checks.py.
@@ -62,6 +67,7 @@ CASTS = {
     "CHI_AUTH_TIMEOUT": float,
     "CHI_AUTH_AUTOCREATE_LOCAL_USER": _to_bool,
     "CHI_AUTH_AUTOCREATE_CHI_AUTH_USER": _to_bool,
+    "CHI_AUTH_USE_MIDDLEWARE": _to_bool,
     "CHI_AUTH_TRUSTED_PROXIES": _to_list,
 }
 
