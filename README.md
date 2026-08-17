@@ -236,6 +236,11 @@ to CHI Auth as its `uri`:
 LOGOUT_REDIRECT_URL = "/my_app/"
 ```
 
+Leaving it unset works too, as of 3.1.1: `LOGIN_REDIRECT_URL` and `LOGOUT_REDIRECT_URL`
+both fall back to `FORCE_SCRIPT_NAME`, so an app served under a prefix lands the user on
+its own root rather than the host’s. Django’s own default for `LOGOUT_REDIRECT_URL` is
+`None`, and “/” on a host serving several applications is somebody else’s.
+
 > Projects upgrading from 3.0 will have CHI Auth’s logout written into that setting by
 > hand, since nothing chained there for them. Such a value is honoured as-is rather than
 > wrapped — sign-out keeps working — but the user is left on CHI Auth instead of back on
@@ -295,6 +300,13 @@ is active outside `DEBUG`.
 MIDDLEWARE = [..., "user_manager.middleware.InspectHeadersMiddleware"]
 SPECIAL_LOG_FOLDER = "/var/log/myproject/"
 ```
+
+## Upgrading from 3.1.0 to 3.1.1
+
+- **`LOGIN_REDIRECT_URL` and `LOGOUT_REDIRECT_URL` fall back to `FORCE_SCRIPT_NAME`**
+  rather than to “/” when unset. This only changes behaviour for an app served under a
+  script prefix that leaves them unset, where the old fallback sent the user to the host
+  root — another application, or a 404. Projects that set both are unaffected.
 
 ## Upgrading from 3.0 to 3.1
 

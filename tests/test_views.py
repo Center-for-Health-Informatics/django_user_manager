@@ -144,6 +144,38 @@ class LogoutViewTests(TestCase):
         self.assertRedirects(response, "/goodbye/", fetch_redirect_response=False)
 
 
+@override_settings(LOGIN_REDIRECT_URL=None, LOGOUT_REDIRECT_URL=None)
+class UnconfiguredRedirectTests(TestCase):
+    """Django's own default for LOGOUT_REDIRECT_URL is None. Falling back to "/" sends the
+    user to the host root, which under a script prefix is another application entirely."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ada", password="hunter2")
+
+    @override_settings(FORCE_SCRIPT_NAME="/my_app/")
+    def test_logout_falls_back_to_the_script_prefix(self):
+        self.client.force_login(self.user)
+        response = self.client.post(LOGOUT_URL)
+        self.assertRedirects(response, "/my_app/", fetch_redirect_response=False)
+
+    @override_settings(FORCE_SCRIPT_NAME="/my_app/")
+    def test_login_falls_back_to_the_script_prefix(self):
+        response = self.client.post(LOGIN_URL, {"username": "ada", "password": "hunter2"})
+        self.assertRedirects(response, "/my_app/", fetch_redirect_response=False)
+
+    @override_settings(FORCE_SCRIPT_NAME="/my_app/")
+    def test_an_offsite_next_falls_back_there_too(self):
+        """The fallback is also the rejection path, so it has to be right for both."""
+        self.client.force_login(self.user)
+        response = self.client.post(LOGOUT_URL, {"next": "https://evil.example/"})
+        self.assertRedirects(response, "/my_app/", fetch_redirect_response=False)
+
+    def test_the_root_is_still_the_root_without_a_prefix(self):
+        self.client.force_login(self.user)
+        response = self.client.post(LOGOUT_URL)
+        self.assertRedirects(response, "/", fetch_redirect_response=False)
+
+
 @override_settings(CHI_AUTH_USE_MIDDLEWARE=True, CHI_AUTH_URL="https://chi-tools.uc.edu/auth/")
 class LogoutViewUnderHeaderSsoTests(TestCase):
     """Clearing the local session is only half of signing out: the SSO-* headers sign the

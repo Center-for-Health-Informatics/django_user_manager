@@ -11,6 +11,17 @@ from django.views.decorators.http import require_POST
 from . import custom_settings
 
 
+def site_root():
+    """Where “the application” is, which is not “/” for anything served under a prefix.
+
+    Django's own default for LOGOUT_REDIRECT_URL is None, so an app that does not set it
+    used to be sent to the host root on sign-out — somebody else's application, or a 404,
+    on a host that serves several. FORCE_SCRIPT_NAME is what the app is mounted under and
+    is already set on every such deployment, so there is nothing new to configure.
+    """
+    return getattr(settings, "FORCE_SCRIPT_NAME", None) or "/"
+
+
 def _safe_redirect_url(request, url, fallback_setting):
     """Return ``url`` only if it points back at this site, otherwise the configured fallback.
 
@@ -23,7 +34,7 @@ def _safe_redirect_url(request, url, fallback_setting):
         require_https=request.is_secure(),
     ):
         return url
-    return getattr(settings, fallback_setting, None) or "/"
+    return getattr(settings, fallback_setting, None) or site_root()
 
 
 def chi_auth_url(view_name, destination):
