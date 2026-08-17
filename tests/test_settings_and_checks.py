@@ -97,6 +97,34 @@ class ChecksTests(SimpleTestCase):
                 with override_settings(MIGRATION_MODULES={"user_manager": value}):
                     self.assertEqual(check_migration_modules(None), [])
 
+    def test_warns_when_use_middleware_is_on_but_the_middleware_is_missing(self):
+        self.assertIn("user_manager.W004", self.ids(MIDDLEWARE=[], CHI_AUTH_USE_MIDDLEWARE=True))
+
+    def test_warns_when_the_middleware_is_installed_but_use_middleware_is_off(self):
+        self.assertIn("user_manager.W005", self.ids(MIDDLEWARE=SSO_MIDDLEWARE))
+
+    def test_no_disagreement_warning_when_both_agree(self):
+        ids = self.ids(MIDDLEWARE=SSO_MIDDLEWARE, CHI_AUTH_USE_MIDDLEWARE=True)
+        self.assertFalse({"user_manager.W004", "user_manager.W005"} & ids)
+
+    def test_warns_when_logout_redirect_url_still_names_chi_auth(self):
+        ids = self.ids(
+            MIDDLEWARE=SSO_MIDDLEWARE,
+            CHI_AUTH_USE_MIDDLEWARE=True,
+            CHI_AUTH_URL="https://chi-tools.uc.edu/auth/",
+            LOGOUT_REDIRECT_URL="/auth/logout?uri=/my_app/",
+        )
+        self.assertIn("user_manager.W006", ids)
+
+    def test_no_logout_redirect_warning_for_a_local_destination(self):
+        ids = self.ids(
+            MIDDLEWARE=SSO_MIDDLEWARE,
+            CHI_AUTH_USE_MIDDLEWARE=True,
+            CHI_AUTH_URL="https://chi-tools.uc.edu/auth/",
+            LOGOUT_REDIRECT_URL="/my_app/",
+        )
+        self.assertNotIn("user_manager.W006", ids)
+
     def test_warns_about_the_header_inspection_log_outside_debug(self):
         ids = self.ids(
             MIDDLEWARE=["user_manager.middleware.InspectHeadersMiddleware"],

@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 User = get_user_model()
 
@@ -70,6 +70,55 @@ class LoginViewTests(TestCase):
         self.assertNotContains(response, "//evil.example/")
 
 
+@override_settings(CHI_AUTH_USE_MIDDLEWARE=True, CHI_AUTH_URL="https://chi-tools.uc.edu/auth/")
+class LoginViewUnderHeaderSsoTests(TestCase):
+    """With header SSO the view cannot sign anyone in itself, so it hands off to CHI Auth."""
+
+    CHI_AUTH_LOGIN = "https://chi-tools.uc.edu/auth/login"
+
+    def test_get_redirects_to_chi_auth_instead_of_rendering_the_form(self):
+        response = self.client.get(LOGIN_URL)
+        self.assertRedirects(
+            response, f"{self.CHI_AUTH_LOGIN}?uri=%2Fdashboard%2F", fetch_redirect_response=False
+        )
+
+    def test_next_is_carried_through_as_uri(self):
+        response = self.client.get(LOGIN_URL + "?next=/reports/2")
+        self.assertRedirects(
+            response, f"{self.CHI_AUTH_LOGIN}?uri=%2Freports%2F2", fetch_redirect_response=False
+        )
+
+    def test_uri_is_last_and_fully_quoted(self):
+        """CHI Auth reads ‘uri’ from the raw query string to the end, so a destination
+        with a query string of its own must not be able to read as more parameters."""
+        response = self.client.get(LOGIN_URL + "?next=/logs%3Fpage%3D2%26uri%3D/evil")
+        self.assertEqual(
+            response["Location"],
+            f"{self.CHI_AUTH_LOGIN}?uri=%2Flogs%3Fpage%3D2%26uri%3D%2Fevil",
+        )
+
+    def test_offsite_next_is_still_rejected(self):
+        response = self.client.get(LOGIN_URL + "?next=https://evil.example/")
+        self.assertRedirects(
+            response, f"{self.CHI_AUTH_LOGIN}?uri=%2Fdashboard%2F", fetch_redirect_response=False
+        )
+
+    def test_no_password_is_accepted_here(self):
+        """A POST is a handoff too — this view must never authenticate under header SSO."""
+        User.objects.create_user(username="ada", password="hunter2")
+        response = self.client.post(LOGIN_URL, {"username": "ada", "password": "hunter2"})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith(self.CHI_AUTH_LOGIN))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_an_authenticated_user_is_not_sent_out_to_chi_auth(self):
+        """Otherwise every request from a signed-in user bounces off CHI Auth and back."""
+        user = User.objects.create_user(username="ada", password="hunter2")
+        self.client.force_login(user)
+        response = self.client.get(LOGIN_URL)
+        self.assertRedirects(response, "/dashboard/", fetch_redirect_response=False)
+
+
 class LogoutViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="ada", password="hunter2")
@@ -93,3 +142,36 @@ class LogoutViewTests(TestCase):
         self.client.logout()
         response = self.client.post(LOGOUT_URL)
         self.assertRedirects(response, "/goodbye/", fetch_redirect_response=False)
+
+
+@override_settings(CHI_AUTH_USE_MIDDLEWARE=True, CHI_AUTH_URL="https://chi-tools.uc.edu/auth/")
+class LogoutViewUnderHeaderSsoTests(TestCase):
+    """Clearing the local session is only half of signing out: the SSO-* headers sign the
+    user straight back in on their next request unless CHI Auth's session goes too."""
+
+    CHI_AUTH_LOGOUT = "https://chi-tools.uc.edu/auth/logout"
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ada", password="hunter2")
+        self.client.force_login(self.user)
+
+    def test_the_local_session_is_cleared_before_the_handoff(self):
+        response = self.client.post(LOGOUT_URL)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri=%2Fgoodbye%2F")
+
+    def test_offsite_next_is_still_rejected(self):
+        response = self.client.post(LOGOUT_URL, {"next": "https://evil.example/"})
+        self.assertEqual(response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri=%2Fgoodbye%2F")
+
+    @override_settings(LOGOUT_REDIRECT_URL="/auth/logout?uri=/my_app/")
+    def test_a_pre_3_1_setting_is_honoured_rather_than_wrapped(self):
+        """Every project had to write this by hand before logout_view chained on its own.
+        Wrapping it would send the browser to /auth/logout?uri=/auth/logout?uri=/my_app/."""
+        response = self.client.post(LOGOUT_URL)
+        self.assertEqual(response["Location"], "/auth/logout?uri=/my_app/")
+
+    @override_settings(LOGOUT_REDIRECT_URL="https://chi-tools.uc.edu/auth/logout?uri=/my_app/")
+    def test_the_absolute_form_of_that_setting_is_recognised_too(self):
+        response = self.client.post(LOGOUT_URL)
+        self.assertEqual(response["Location"], "https://chi-tools.uc.edu/auth/logout?uri=/my_app/")
