@@ -67,14 +67,30 @@ def chi_auth_logout_url(destination):
 def _already_chi_auth(url, view_name):
     """Is ``url`` already pointing at one of CHI Auth's own views?
 
-    Only asked about LOGOUT_REDIRECT_URL, and only to keep upgrading from 3.0 from
-    silently breaking sign-out: before 3.1 every project had to write CHI Auth's logout
-    into that setting by hand, and wrapping such a value would send the browser to
-    ``/auth/logout?uri=/auth/logout?uri=/the/app``. Matched on path so it works whether
-    the configured value is absolute or rooted, as both forms are in use.
+    Matched on path so it works whether the value is absolute or rooted; both forms are
+    in use. Say nothing about an empty value — urlparse("").path is "", which would match
+    a CHI_AUTH_URL of "" and turn an unconfigured app into the legacy case.
     """
+    if not url:
+        return False
     chi_auth_path = urlparse(custom_settings.CHI_AUTH_URL).path
     return urlparse(url).path == f"{chi_auth_path}{view_name}"
+
+
+def _is_legacy_logout_setting(destination):
+    """Is ``destination`` the pre-3.1 LOGOUT_REDIRECT_URL, naming CHI Auth's own logout?
+
+    Such a value is passed through rather than wrapped, so that upgrading from 3.0 cannot
+    break sign-out by producing ``/auth/logout?uri=/auth/logout?uri=/the/app``.
+
+    It has to be the *configured* value, not merely something shaped like it: ``next`` is
+    request input, and a link crafted with ``next=/auth/logout?uri=…`` is same-site, so it
+    passes the safety check and would otherwise take this branch — letting whoever wrote
+    the link choose the ‘uri’ handed to CHI Auth. Nothing here can vouch for that value,
+    and only CHI Auth's own safe_path currently refuses it.
+    """
+    configured = getattr(settings, "LOGOUT_REDIRECT_URL", "") or ""
+    return destination == configured and _already_chi_auth(configured, "logout")
 
 
 @never_cache
@@ -133,6 +149,6 @@ def logout_view(request):
 
     next_url = _safe_redirect_url(request, request.POST.get("next"), "LOGOUT_REDIRECT_URL")
 
-    if custom_settings.CHI_AUTH_USE_MIDDLEWARE and not _already_chi_auth(next_url, "logout"):
+    if custom_settings.CHI_AUTH_USE_MIDDLEWARE and not _is_legacy_logout_setting(next_url):
         return redirect(chi_auth_logout_url(next_url))
     return redirect(next_url)

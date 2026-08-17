@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
@@ -144,6 +146,79 @@ class LogoutViewTests(TestCase):
         self.assertRedirects(response, "/goodbye/", fetch_redirect_response=False)
 
 
+OFFSITE_NEXTS = [
+    "https://evil.example/",
+    "//evil.example/",
+    "////evil.example",
+    "https://testserver.evil.example/",  # our host as a prefix of theirs
+    "http://evil.example\\@testserver/",  # backslash is not a userinfo separator
+    "/\\evil.example",  # browsers read \ as / in the authority
+    "\\\\evil.example",
+    "http:/\\evil.example",
+    "https:evil.example",  # scheme with no //, resolved as a host by some parsers
+    "\t//evil.example",  # control characters are stripped before parsing
+    "/\t/evil.example",
+    "javascript:alert(1)",
+    "data:text/html,<script>1</script>",
+]
+
+
+class OffsiteNextTests(TestCase):
+    """No ``next`` may take the browser off this site. It is a URL an attacker chooses and
+    a user follows from a page that just handled their credentials, so the whole value of
+    the sign-in page as somewhere safe to type a password rests on this holding.
+
+    Both views delegate to ``_safe_redirect_url``; these pin the outcome rather than the
+    mechanism, so a refactor that stopped calling it would fail here.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ada", password="hunter2")
+
+    def test_login_rejects_them_on_the_authenticated_path(self):
+        for nxt in OFFSITE_NEXTS:
+            with self.subTest(next=nxt):
+                self.client.force_login(self.user)
+                response = self.client.get(LOGIN_URL, {"next": nxt})
+                self.assertEqual(response["Location"], "/dashboard/")
+
+    def test_login_rejects_them_on_the_password_path(self):
+        for nxt in OFFSITE_NEXTS:
+            with self.subTest(next=nxt):
+                self.client.logout()
+                response = self.client.post(
+                    f"{LOGIN_URL}?next={quote(nxt, safe='')}",
+                    {"username": "ada", "password": "hunter2"},
+                )
+                self.assertEqual(response["Location"], "/dashboard/")
+
+    def test_logout_rejects_them(self):
+        for nxt in OFFSITE_NEXTS:
+            with self.subTest(next=nxt):
+                self.client.force_login(self.user)
+                response = self.client.post(LOGOUT_URL, {"next": nxt})
+                self.assertEqual(response["Location"], "/goodbye/")
+
+    @override_settings(CHI_AUTH_USE_MIDDLEWARE=True, CHI_AUTH_URL="https://chi-tools.uc.edu/auth/")
+    def test_none_of_them_reaches_chi_auth_as_a_uri(self):
+        """The handoff must not become a way to launder a destination past the check."""
+        for nxt in OFFSITE_NEXTS:
+            with self.subTest(next=nxt):
+                self.client.force_login(self.user)
+                response = self.client.post(LOGOUT_URL, {"next": nxt})
+                self.assertEqual(
+                    response["Location"],
+                    "https://chi-tools.uc.edu/auth/logout?uri=%2Fgoodbye%2F",
+                )
+
+    def test_a_same_site_path_that_merely_looks_hostile_is_still_honoured(self):
+        """`evil.example` here is a path segment on our own host, not a destination.
+        Over-rejecting would break ordinary links; the check is about scheme and host."""
+        self.client.force_login(self.user)
+        response = self.client.post(LOGOUT_URL, {"next": "/redirect?url=https://evil.example"})
+        self.assertEqual(response["Location"], "/redirect?url=https://evil.example")
+
+
 @override_settings(LOGIN_REDIRECT_URL=None, LOGOUT_REDIRECT_URL=None)
 class UnconfiguredRedirectTests(TestCase):
     """Django's own default for LOGOUT_REDIRECT_URL is None. Falling back to "/" sends the
@@ -207,3 +282,24 @@ class LogoutViewUnderHeaderSsoTests(TestCase):
     def test_the_absolute_form_of_that_setting_is_recognised_too(self):
         response = self.client.post(LOGOUT_URL)
         self.assertEqual(response["Location"], "https://chi-tools.uc.edu/auth/logout?uri=/my_app/")
+
+    def test_a_crafted_next_cannot_reach_the_passthrough(self):
+        """`next=/auth/logout?uri=…` is same-site, so it passes the safety check. It must
+        still be wrapped like any other destination: taking the passthrough would let
+        whoever wrote the link choose the ‘uri’ handed to CHI Auth, with only CHI Auth's
+        own safe_path standing between that and an off-site redirect."""
+        crafted = "/auth/logout?uri=https://evil.example/"
+        response = self.client.post(LOGOUT_URL, {"next": crafted})
+        self.assertEqual(
+            response["Location"], f"{self.CHI_AUTH_LOGOUT}?uri={quote(crafted, safe='')}"
+        )
+        # and what CHI Auth reads as its own ‘uri’ is that whole path, quoted — not the
+        # off-site URL sitting inside it
+        self.assertNotIn("://", response["Location"].split("?uri=", 1)[1])
+
+    @override_settings(LOGOUT_REDIRECT_URL="/auth/logout?uri=/my_app/")
+    def test_a_crafted_next_cannot_borrow_the_legacy_setting_either(self):
+        """Even where the legacy setting is in play, the passthrough is for that exact
+        configured value — not for anything a request says looks like it."""
+        response = self.client.post(LOGOUT_URL, {"next": "/auth/logout?uri=https://evil.example/"})
+        self.assertTrue(response["Location"].startswith(self.CHI_AUTH_LOGOUT))

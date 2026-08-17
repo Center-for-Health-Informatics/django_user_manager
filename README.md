@@ -245,7 +245,26 @@ its own root rather than the host’s. Django’s own default for `LOGOUT_REDIRE
 > hand, since nothing chained there for them. Such a value is honoured as-is rather than
 > wrapped — sign-out keeps working — but the user is left on CHI Auth instead of back on
 > your site, and `manage.py check` reports `user_manager.W006` until it is replaced with a
-> local path.
+> local path. The passthrough applies to that *configured* value only, never to a `next`
+> that merely looks like it; see “Redirect safety”.
+
+### Redirect safety
+
+A `next` parameter is a URL an attacker chooses and a user follows, from the page that
+just handled their password. Every one of them — `?next=` on login, `next` posted to
+logout — is checked against the request’s own host and scheme, and anything off-site is
+discarded in favour of the configured fallback. This is not configurable and there is no
+opt-out. `tests/test_views.py` pins the outcome against a battery of the usual evasions
+(`//host`, `/\host`, backslash authorities, embedded tabs, `javascript:`, `data:`) for
+both views, so a refactor that stopped checking fails the suite rather than shipping.
+
+Same-site paths are honoured even when they look hostile — `/redirect?url=https://…` is a
+path on your own host, and rejecting it would break ordinary links. If your app has an
+open redirect at that path, that is the thing to fix.
+
+Under header SSO the destination is handed to CHI Auth as its `uri`, fully quoted, so the
+handoff cannot be used to launder a destination past the check: CHI Auth reads the whole
+value as one opaque path, and re-checks it besides.
 
 Between this and the login handoff, no application needs to write a CHI Auth URL anywhere:
 `CHI_AUTH_URL`, `CHI_AUTH_USE_MIDDLEWARE` and your own script prefix determine all of them.
@@ -303,6 +322,11 @@ SPECIAL_LOG_FOLDER = "/var/log/myproject/"
 
 ## Upgrading from 3.1.0 to 3.1.1
 
+- **The legacy `LOGOUT_REDIRECT_URL` passthrough now applies to the configured value
+  only.** A request supplying `next=/auth/logout?uri=…` is same-site, so it passed the
+  safety check and took that branch, letting whoever wrote the link choose the `uri`
+  handed to CHI Auth — with only CHI Auth’s own `safe_path` refusing an off-site one.
+  Such a `next` is now wrapped like any other destination. 3.1.0 only.
 - **`LOGIN_REDIRECT_URL` and `LOGOUT_REDIRECT_URL` fall back to `FORCE_SCRIPT_NAME`**
   rather than to “/” when unset. This only changes behaviour for an app served under a
   script prefix that leaves them unset, where the old fallback sent the user to the host
