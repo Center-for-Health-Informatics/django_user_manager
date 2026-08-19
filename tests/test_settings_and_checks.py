@@ -57,7 +57,23 @@ class ContextProcessorTests(SimpleTestCase):
     def test_chi_auth_links_are_shown_when_the_backend_is_installed(self):
         context = settings_context_processor(None)
         self.assertTrue(context["allow_chi_auth_login"])
+        # relative, because CHI_AUTH_URL is: the link has to stay on the host the user
+        # is already signed in to
+        self.assertEqual(context["ACCOUNT_LOOKUP_URL"], "/auth/account_lookup")
+
+    @override_settings(CHI_AUTH_URL="https://chi.uc.edu/auth/")
+    def test_account_lookup_url_still_honours_an_absolute_setting(self):
+        context = settings_context_processor(None)
         self.assertEqual(context["ACCOUNT_LOOKUP_URL"], "https://chi.uc.edu/auth/account_lookup")
+
+    def test_assets_url_is_exposed_to_the_sign_in_template(self):
+        self.assertEqual(
+            settings_context_processor(None)["ASSETS_URL"], "https://chi.uc.edu/assets/"
+        )
+
+    @override_settings(ASSETS_URL="/assets/")
+    def test_assets_url_can_be_overridden(self):
+        self.assertEqual(settings_context_processor(None)["ASSETS_URL"], "/assets/")
 
     @override_settings(AUTHENTICATION_BACKENDS=["django.contrib.auth.backends.ModelBackend"])
     def test_chi_auth_links_are_hidden_otherwise(self):
@@ -124,6 +140,15 @@ class ChecksTests(SimpleTestCase):
             LOGOUT_REDIRECT_URL="/my_app/",
         )
         self.assertNotIn("user_manager.W006", ids)
+
+    def test_warns_when_chi_auth_url_names_a_host(self):
+        self.assertIn("user_manager.W007", self.ids(CHI_AUTH_URL="https://chi.uc.edu/auth/"))
+
+    def test_no_warning_for_a_relative_chi_auth_url(self):
+        self.assertNotIn("user_manager.W007", self.ids(CHI_AUTH_URL="/auth/"))
+
+    def test_no_warning_for_the_default_chi_auth_url(self):
+        self.assertNotIn("user_manager.W007", self.ids())
 
     def test_warns_about_the_header_inspection_log_outside_debug(self):
         ids = self.ids(

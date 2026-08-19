@@ -2,6 +2,8 @@
 by ``manage.py check`` instead of going unnoticed.
 """
 
+from urllib.parse import urlparse
+
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
@@ -112,6 +114,25 @@ def check_chi_auth_middleware(app_configs, **kwargs):
                 hint="Set LOGOUT_REDIRECT_URL to where the user should land on this site "
                 "once signed out — the site root, or FORCE_SCRIPT_NAME under a sub-path.",
                 id="user_manager.W006",
+            )
+        )
+
+    # CHI Auth redirects to a bare path, which the browser resolves against whichever
+    # host it was sent to — so naming a host here only works while that host is also the
+    # one serving this app. It is a warning rather than an error because an absolute
+    # value pointing at the app's own host does work, and an existing deployment should
+    # not fail to start over it.
+    chi_auth_url = urlparse(custom_settings.CHI_AUTH_URL)
+    if chi_auth_url.scheme or chi_auth_url.netloc:
+        errors.append(
+            Warning(
+                f"CHI_AUTH_URL names a host ({custom_settings.CHI_AUTH_URL!r}). Single "
+                "sign-on is per-domain: the session cookie and the SSO-* headers belong "
+                "to the host that signs the user in, and CHI Auth redirects back to a "
+                "bare path resolved against that same host. If it is not the host serving "
+                "this app, users sign in there and land there.",
+                hint='Use a relative "/auth/" — every vhost proxies it for itself.',
+                id="user_manager.W007",
             )
         )
 

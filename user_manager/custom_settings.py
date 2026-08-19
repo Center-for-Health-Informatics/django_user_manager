@@ -31,8 +31,15 @@ def _to_list(value):
 DEFAULTS = {
     "LOGIN_URL_FOR_LINK": "/user_manager/login",
     "LOGOUT_URL_FOR_LINK": "/user_manager/logout",
-    # if using CHI AUTH, what is the root URL for the system
-    "CHI_AUTH_URL": "https://chi.uc.edu/auth/",
+    # If using CHI Auth, what is the root URL for the system.
+    #
+    # Relative on purpose. Every vhost proxies /auth/ for itself, and CHI Auth redirects
+    # to a bare path which the browser resolves against *CHI Auth's* host — so an
+    # absolute value here sends the user to that host to sign in, sets the session cookie
+    # there, and lands them back on that host rather than this app's. Single sign-on does
+    # not span domains: the cookie and the SSO-* headers are per-domain. See checks.py
+    # W007, which warns when this names a host.
+    "CHI_AUTH_URL": "/auth/",
     # you need to provide an access token if using CHI_Auth
     "CHI_AUTH_API_ACCESS_TOKEN": "",
     # seconds to wait on any call out to CHI Auth before giving up
@@ -60,6 +67,12 @@ DEFAULTS = {
     "SITE_TITLE": "Center for Health Informatics",
     "CONTACT_EMAIL": "combmichi@uc.edu",
     "UC_PASSWORD_MANAGER_URL": "https://www.uc.edu/sspr",
+    # Base URL of the shared CHI asset library, trailing slash included; the sign-in
+    # template links its stylesheet and favicon from here. Absolute by default so an
+    # existing consumer that says nothing keeps the styling it has, but overridable —
+    # a project served under several hostnames (or one that wants same-origin assets
+    # for a CSP) sets it to "/assets/". Templates concatenate directly onto it.
+    "ASSETS_URL": "https://chi.uc.edu/assets/",
 }
 
 # settings that need converting when they arrive as a string from the process environment

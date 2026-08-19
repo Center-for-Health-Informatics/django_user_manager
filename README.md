@@ -93,8 +93,11 @@ path('user_manager/', include('user_manager.urls')),
 
 Customize the behavior of CHI_AUTH. These values can be set in the host project’s `settings.py` or in the process environment (the Django setting wins).
 ```python
-# if using CHI AUTH, what is the root URL for the system
-CHI_AUTH_URL = "https://chi.uc.edu/auth/"
+# if using CHI AUTH, what is the root URL for the system.
+# Keep it relative: every vhost proxies /auth/ for itself, and single sign-on is
+# per-domain — see “CHI_AUTH_URL must be relative” below. Naming a host raises
+# user_manager.W007.
+CHI_AUTH_URL = "/auth/"
 
 # you need to provide an access token if using CHI_Auth
 CHI_AUTH_API_ACCESS_TOKEN = "🤫"
@@ -140,7 +143,30 @@ CONTACT_EMAIL = "combmichi@uc.edu"
 
 # where to change a UC password
 UC_PASSWORD_MANAGER_URL = "https://www.uc.edu/sspr"
+
+# base URL of the shared CHI asset library, trailing slash included — the sign-in
+# page links its stylesheet and favicon from here. Set it to "/assets/" where the
+# library is served from this same host, and the assets stop being cross-origin.
+ASSETS_URL = "https://chi.uc.edu/assets/"
 ```
+
+## `CHI_AUTH_URL` must be relative
+
+CHI Auth redirects back to a **bare path**, which the browser resolves against whichever
+host it was sent to. So an absolute `CHI_AUTH_URL` only works while the host it names is
+also the host serving this app:
+
+1. the browser goes to `https://chi.uc.edu/auth/login?uri=/myapp/`
+2. the user signs in; the session cookie is set for `chi.uc.edu`
+3. CHI Auth redirects to `/myapp/` — which resolves to `https://chi.uc.edu/myapp/`
+
+An app on `chi-dev.uc.edu` therefore signs its users in on `chi.uc.edu` and leaves them
+there. Single sign-on does not span domains by design: the cookie and the `SSO-*` headers
+are per-domain.
+
+`/auth/` is right on every host, because each vhost proxies it for itself.
+`user_manager.W007` warns if the configured value names a host — a warning rather than an
+error, because an absolute value pointing at the app’s *own* host does work.
 
 ## Migrations
 

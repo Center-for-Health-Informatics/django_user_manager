@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" href="https://chi.uc.edu/assets/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="https://chi.uc.edu/assets/login.css">
+  {# the shared CHI asset library, at the configurable ASSETS_URL — this is a package,
+     so a consuming project must be able to point it somewhere else. c.f. issue #14 #}
+  <link rel="icon" href="{{ ASSETS_URL }}favicon.ico" sizes="any">
+  <link rel="stylesheet" href="{{ ASSETS_URL }}login.css">
   <title>CHI Login</title>
 </head>
 

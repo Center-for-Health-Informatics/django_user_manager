@@ -16,6 +16,7 @@ def settings_context_processor(request):
         "ACCOUNT_LOOKUP_URL": f"{custom_settings.CHI_AUTH_URL}account_lookup",
         "CONTACT_EMAIL": custom_settings.CONTACT_EMAIL,
         "SITE_TITLE": custom_settings.SITE_TITLE,
+        "ASSETS_URL": custom_settings.ASSETS_URL,
         "allow_chi_auth_login": allow_chi_auth_login,
     }
 
