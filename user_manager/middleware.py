@@ -66,8 +66,16 @@ class ChiAuthLoginMiddleware:
 
     Security: these headers are trusted, so nginx must strip any inbound SSO-* headers
     before setting its own, and the app server must not be reachable except through
-    nginx — otherwise anyone can authenticate as anyone by sending SSO-Username. Set
-    CHI_AUTH_TRUSTED_PROXIES to have this middleware enforce that itself.
+    nginx — otherwise anyone can authenticate as anyone by sending SSO-Username.
+
+    CHI_AUTH_TRUSTED_PROXIES has this middleware enforce the second requirement itself.
+    That works only under the deployment topology the estate now uses: the sidecar shares
+    the app container's network namespace and gunicorn binds 127.0.0.1, so a request
+    arriving through nginx has REMOTE_ADDR 127.0.0.1 and nothing off-box can produce one.
+    It is defence in depth behind the port binding, not a substitute for it — see
+    chi-platform conventions.md, "A published port must name an address that cannot
+    default". On a *bridge*-networked sidecar the check cannot distinguish anything,
+    because REMOTE_ADDR is then the bridge gateway for proxied and direct requests alike.
     """
 
     def __init__(self, get_response):
@@ -129,7 +137,14 @@ class ChiAuthLoginMiddleware:
 
     @staticmethod
     def already_logged_in(request, username):
-        return request.user.is_authenticated and request.user.get_username() == username
+        # casefold to match get_or_create_user's __iexact lookup. Comparing exactly would
+        # miss when the session was established as "jsmith" and the header now says
+        # "JSmith" — the same account, so login() would run again on every request,
+        # cycling the session key each time.
+        return (
+            request.user.is_authenticated
+            and request.user.get_username().casefold() == username.casefold()
+        )
 
     @staticmethod
     def session_backend():
@@ -144,9 +159,23 @@ class ChiAuthLoginMiddleware:
     @staticmethod
     def get_or_create_user(request, username):
         User = get_user_model()
-        oUser = User.objects.filter(username=username).first()
+        # __iexact, not an exact match: the header carries whatever casing the user typed
+        # at CHI Auth, and the directory behind it is case-insensitive. Matching exactly
+        # makes "JSmith" and "jsmith" two accounts with separate permissions and separate
+        # rows pointing at them. See checks.py W008.
+        oUser = User.objects.filter(username__iexact=username).first()
         if not oUser:
+            if not custom_settings.CHI_AUTH_AUTOCREATE_LOCAL_USER:
+                # the same answer ChiAuthBackend gives on the password path; before 4.0.0
+                # this path provisioned regardless and the setting meant nothing here
+                logger.warning(
+                    "Refusing SSO login for unknown user %r: CHI_AUTH_AUTOCREATE_LOCAL_USER is off",
+                    username,
+                )
+                return None
             oUser = User(
+                # stored as the header gave it — folding to lower case here would
+                # rewrite the display name of every account created from now on
                 username=username,
                 email=request.META.get("HTTP_SSO_EMAIL", ""),
                 first_name=request.META.get("HTTP_SSO_FIRSTNAME", ""),

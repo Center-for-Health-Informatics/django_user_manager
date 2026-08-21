@@ -7,7 +7,7 @@ name = "user_manager"
 dynamic = ["version"]
 description = "Django app for integrating Django project with CHI_AUTH system"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 # not open source; LicenseRef-* is how PEP 639 spells a private/custom license
 license = "LicenseRef-Proprietary"
 license-files = ["LICENSE"]
@@ -20,20 +20,22 @@ classifiers = [
     "Private :: Do Not Upload",
     "Environment :: Web Environment",
     "Framework :: Django",
-    "Framework :: Django :: 5.2",
     "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 dependencies = [
-    "Django>=5.2,<7",
+    # floor at 6.0, ceiling open to the next major. Every consumer pins >=6.1,<6.2; 6.0
+    # is one release of slack, not a version anyone runs. 5.2 was dropped in 4.0.0 —
+    # it was never exercised by any deployment and kept the Python floor at 3.10.
+    "Django>=6.0,<7",
     "requests",
 ]
 
@@ -51,7 +53,9 @@ user_manager = ["templates/**/*"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+# py312 because that is this package's floor (requires-python), not the 3.14 every
+# consumer runs. An application pins its runtime; a library states the oldest it supports.
+target-version = "py312"
 # the README's code blocks are illustrative fragments, not code to be formatted
 extend-exclude = ["*.md"]
 

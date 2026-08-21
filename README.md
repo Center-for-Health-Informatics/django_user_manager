@@ -2,16 +2,29 @@
 
 ## About
 
-This is a Django app that integrates well with the [CHI_AUTH](https://github.com/Center-for-Health-Informatics/chi_auth) tool (though it doesn’t require the CHI_AUTH tool to use). There are a few possible configurations:
+This is a Django app that integrates a Django project with the
+[CHI_AUTH](https://github.com/Center-for-Health-Informatics/chi_auth) tool, though it does
+not require CHI_AUTH to be useful.
 
-- normal Django local login
-    - not much benefit over normal Django user system
-- local login integration with CHI_AUTH
-    - allows users to log in with their UC or CHI credentials
-- CHI_AUTH login
-    - all login is handled by CHI_AUTH and credentials are passed to this application through nginx as HTTP headers
+**There are two deployment modes, and a project is in exactly one of them.** Which one you
+are in decides what `login_view` does, where passwords are typed, and what the security
+boundary is — so pick it first and read the matching section below.
 
-Supports Django 5.2 and 6.0 on Python 3.10+.
+| | **Header SSO** | **Local login** |
+| --- | --- | --- |
+| `CHI_AUTH_USE_MIDDLEWARE` | `True` | `False` (the default) |
+| who collects the password | CHI_AUTH, on its own page | this app, on `/user_manager/login` |
+| how identity arrives | `SSO-*` request headers set by nginx | a Django session from `authenticate()` |
+| what `login_view` does | redirects to `CHI_AUTH_URL + "login"` | renders its own form |
+| what secures it | **the network** — see “Header based SSO” | Django’s own session and CSRF handling |
+| used by | every CHI deployment | development, and non-CHI deployments |
+
+Within local login, `AUTHENTICATION_BACKENDS` decides *which* credentials the form accepts:
+Django’s `ModelBackend` alone for local passwords only, plus `ChiAuthBackend` to accept UC
+or CHI credentials as well. `CHI_AUTH_CHECK_SYSTEMS` then narrows that further — set it to
+`"local"` to accept CHI accounts while leaving UC Active Directory out of it entirely.
+
+Supports Django 6.0 and 6.1 on Python 3.12+.
 
 Projects using it: daedalus, ocr_importer, monitor, neurords, rap_subsystem, fcc_tracker,
 email_service, covidicus. Daedalus is the most recently updated and is the best worked
@@ -22,12 +35,15 @@ example to copy from.
 Install from GitHub with pip
 
 ```shell
-pip install "user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v3.0.0"
+pip install "user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v4.0.0"
 ```
+
+Check the tag against the latest release — this snippet is hand-maintained and has been
+stale before.
 
 or add to a `requirements.txt` file
 ```
-user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v3.0.0
+user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v4.0.0
 ```
 
 Add `user_manager` app to your installed apps
@@ -91,7 +107,11 @@ Add to urls.py
 path('user_manager/', include('user_manager.urls')),
 ```
 
-Customize the behavior of CHI_AUTH. These values can be set in the host project’s `settings.py` or in the process environment (the Django setting wins).
+Customize the behavior of CHI_AUTH. These go in the host project’s `settings.py`, which
+as of 4.0.0 is the **only** place they are read from — the package no longer consults the
+process environment. A project wanting one of these configurable per deployment reads the
+environment itself, the same way it does for everything else it configures, so that
+`example.settings.env` stays an honest list of what the container accepts.
 ```python
 # if using CHI AUTH, what is the root URL for the system.
 # Keep it relative: every vhost proxies /auth/ for itself, and single sign-on is
@@ -102,15 +122,15 @@ CHI_AUTH_URL = "/auth/"
 # you need to provide an access token if using CHI_Auth
 CHI_AUTH_API_ACCESS_TOKEN = "🤫"
 
-# Which CHI_AUTH systems do you want to use for authentication?
-# ucad is UC Active Directory, local is CHI_AUTH credentials for non-UC users
-CHI_AUTH_CHECK_SYSTEMS = 'local, ucad'
+# Which CHI_AUTH systems do you want to use for authentication, in order?
+# ucad is UC Active Directory, local is CHI_AUTH credentials for non-UC users.
+# The order decides which one authenticates a password when an account exists in both,
+# not merely which is asked first. Set it to "local" to turn UC AD off altogether.
+CHI_AUTH_CHECK_SYSTEMS = 'ucad, local'
 
-# if user authenticates through CHI_AUTH but doesn't exist locally, create new user?
+# Provision a local account for someone CHI_AUTH authenticates but this app has never
+# seen? Applies to both login paths. Defaults True; set False for closed provisioning.
 CHI_AUTH_AUTOCREATE_LOCAL_USER = True
-
-# new users created locally should automatically generate new user in CHI_AUTH
-CHI_AUTH_AUTOCREATE_CHI_AUTH_USER = False
 
 # seconds to wait on any call out to CHI Auth before giving up and failing the login
 CHI_AUTH_TIMEOUT = 5
@@ -313,13 +333,27 @@ alongside it.
 > 1. nginx **strips any inbound `SSO-*` headers** before setting its own.
 > 2. The application server is not reachable except through nginx.
 >
-> Set `CHI_AUTH_TRUSTED_PROXIES` and the middleware will enforce (2) itself, ignoring the
-> headers on requests that came from anywhere else. `manage.py check` emits
-> `user_manager.W001` while it is unset.
+> **Close (2) at the network first.** The published port must be bound to a private
+> address, and the nginx sidecar should share the app container's network namespace
+> (`network_mode: "service:app"`) so gunicorn can bind `127.0.0.1` and have no listener on
+> the compose bridge at all. See chi-platform `conventions.md`, *“A published port must
+> name an address that cannot default”*; a firewall rule is not a substitute, because
+> `docker-proxy` holds the port.
+>
+> `CHI_AUTH_TRUSTED_PROXIES` then enforces the same thing at the application layer, and
+> answers `user_manager.W001`. **This works only under that topology**, and its
+> correctness is entirely a property of the deployment rather than of this package: with
+> a namespace-sharing sidecar, nginx reaches gunicorn as `127.0.0.1` and nothing off-box
+> can produce that peer address. With a *bridge*-networked sidecar it distinguishes
+> nothing, because `REMOTE_ADDR` is the bridge gateway for a proxied request and a direct
+> one alike — which is how daedalus came to be fully bypassable with
+> `CHI_AUTH_TRUSTED_PROXIES=172.16.0.0/12` set (daedalus#73).
 
 ```python
-# IPs or CIDR ranges of your nginx server(s)
-CHI_AUTH_TRUSTED_PROXIES = ["10.0.0.1", "10.1.0.0/24"]
+# In compose.yaml, not settings.env: this is a property of the container topology, and a
+# deployment-local override re-opens the bypass. Anything broader than /32 readmits the
+# bridge gateway and silences W001 without changing behaviour.
+CHI_AUTH_TRUSTED_PROXIES = ["127.0.0.1/32"]
 ```
 
 nginx side, in outline:
@@ -348,6 +382,40 @@ is active outside `DEBUG`.
 MIDDLEWARE = [..., "user_manager.middleware.InspectHeadersMiddleware"]
 SPECIAL_LOG_FOLDER = "/var/log/myproject/"
 ```
+
+## Upgrading from 3.2 to 4.0
+
+A larger release than the version alone suggests: it closes the whole open issue queue,
+and most of it is *removal* of configuration surface. Nothing here needs a code change in
+a consumer, but three items need a `settings.env` edit.
+
+- **The process environment is no longer read.** `settings.py` is the only configuration
+  surface. Measured across all consumers, exactly three settings resolved through the
+  environment — `CHI_AUTH_TIMEOUT`, `USER_MANAGER_ABSTRACT_USER_MODEL` and
+  `UC_PASSWORD_MANAGER_URL` — and none was set from it in any deployment, so in practice
+  nothing moves. **Check your deployed `settings.env` for those three before upgrading.**
+  (#17)
+- **Booleans are parsed strictly.** Only a case-insensitive `true` is True, matching the
+  `env_bool` helper in every consumer’s `settings.py`. `1`, `yes` and `on` now read as
+  False. **Check your deployed `settings.env` for `=1`, `=yes` and `=on`.** (#17)
+- **`CHI_AUTH_AUTOCREATE_LOCAL_USER` now governs the header-SSO path too, and defaults
+  `True`.** It previously gated only the password path, so it did not answer the question
+  a deployer thought they were asking. The default flipped `False` → `True` precisely so
+  that behaviour does *not* change on upgrade: the middleware provisioned unconditionally
+  before. Set it `False` for closed provisioning — which now works on both paths. (#8)
+- **`CHI_AUTH_CHECK_SYSTEMS` defaults to `"ucad, local"`**, the value all four deployed
+  consumers set, rather than the inverted `"local, ucad"`. The order decides which
+  directory authenticates a password. A project that states the value explicitly is
+  unaffected. (#9)
+- **`CHI_AUTH_AUTOCREATE_CHI_AUTH_USER` and the `post_save` signal it drove are gone.**
+  Unset in every deployment. (#9)
+- **Usernames are matched case-insensitively** on both login paths, since the directory
+  behind CHI Auth is. The stored spelling is left alone. `user_manager.W008` reports any
+  pre-existing pair of accounts differing only in case — those are ambiguous under the new
+  lookup and need merging by hand. **Run `manage.py check` before deploying.** (#3)
+- **Django 6.0+ and Python 3.12+.** Django 5.2 is dropped; no deployment ran it, and CI
+  now covers 6.1, which every consumer pins and which nothing had ever tested this package
+  against.
 
 ## Upgrading from 3.1.1 to 3.1.2
 

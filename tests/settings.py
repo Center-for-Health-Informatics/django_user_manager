@@ -1,11 +1,9 @@
-import os
-
-from user_manager.custom_settings import DEFAULTS
-
-# user_manager reads its settings from the process environment when there is no Django
-# setting, so a developer's ambient CHI_AUTH_* exports would otherwise change test results.
-for _name in DEFAULTS:
-    os.environ.pop(_name, None)
+# No environment scrubbing here on purpose. Before 4.0.0 this file had to pop every
+# CHI_AUTH_* name out of os.environ, because user_manager read the process environment
+# when there was no Django setting and a developer's ambient exports would otherwise
+# change test results. get_setting no longer consults the environment at all (issue #17),
+# so there is nothing to defend against — and tests/test_settings_and_checks.py asserts
+# that, by setting these variables and expecting them to be ignored.
 
 SECRET_KEY = "not-a-secret-only-used-by-the-test-suite"  # noqa: S105
 DEBUG = False
