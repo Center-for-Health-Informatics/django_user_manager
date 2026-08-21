@@ -98,6 +98,60 @@ class ChiAuthLoginMiddlewareTests(TestCase):
             self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="ada", REMOTE_ADDR="10.0.0.1")
         self.assertFalse(User.objects.exists())
 
+    @override_settings(CHI_AUTH_TRUSTED_PROXIES=["127.0.0.1/32"])
+    def test_the_deployed_value_admits_the_namespace_sharing_sidecar(self):
+        """127.0.0.1/32 in compose.yaml is what all three consumers deploy. It works
+        because the sidecar shares the app's network namespace and gunicorn binds
+        127.0.0.1, so nginx reaches it as 127.0.0.1 and nothing off-box can.
+        """
+        self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="ada", REMOTE_ADDR="127.0.0.1")
+        self.assertTrue(User.objects.filter(username="ada").exists())
+
+    def test_a_username_differing_only_in_case_reuses_the_account(self):
+        """Issue #3. The header carries whatever casing was typed at CHI Auth, against a
+        case-insensitive directory, so an exact match makes two accounts for one person.
+        """
+        user = User.objects.create_user(username="ada")
+        self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="AdA")
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(self.client.session["_auth_user_id"], str(user.pk))
+
+    def test_the_stored_spelling_is_left_alone(self):
+        User.objects.create_user(username="Ada")
+        self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="ada")
+        self.assertEqual(User.objects.get().username, "Ada")
+
+    def test_a_new_user_keeps_the_casing_the_header_gave(self):
+        self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="AdaL")
+        self.assertEqual(User.objects.get().username, "AdaL")
+
+    def test_a_changed_casing_does_not_re_login_on_every_request(self):
+        """already_logged_in casefolds too. Comparing exactly would treat the session's
+        "ada" and a later header of "Ada" as different people and call login() again,
+        cycling the session key on each request.
+        """
+        self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="ada")
+        first = self.client.session.session_key
+        self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="Ada")
+        self.assertEqual(self.client.session.session_key, first)
+
+    @override_settings(CHI_AUTH_AUTOCREATE_LOCAL_USER=False)
+    def test_an_unknown_user_is_refused_when_autocreate_is_off(self):
+        """Issue #8: this path used to provision regardless, so the setting answered a
+        question — does this app provision accounts for people it has never seen? — that
+        it did not actually govern.
+        """
+        with self.assertLogs("user_manager.middleware", "WARNING"):
+            self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="ada")
+        self.assertFalse(User.objects.exists())
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    @override_settings(CHI_AUTH_AUTOCREATE_LOCAL_USER=False)
+    def test_an_existing_user_still_signs_in_when_autocreate_is_off(self):
+        user = User.objects.create_user(username="ada")
+        self.client.get(LOGIN_URL, HTTP_SSO_USERNAME="ada")
+        self.assertEqual(self.client.session["_auth_user_id"], str(user.pk))
+
     def test_requires_authentication_middleware(self):
         request = RequestFactory().get("/")
         middleware = ChiAuthLoginMiddleware(lambda r: HttpResponse())

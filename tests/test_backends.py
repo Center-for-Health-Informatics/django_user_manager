@@ -55,10 +55,21 @@ class ChiAuthBackendTests(TestCase):
             self.assertIsNone(self.backend.authenticate(None, "ada", "pw"))
         get.assert_not_called()
 
+    @override_settings(CHI_AUTH_AUTOCREATE_LOCAL_USER=False)
     def test_unknown_user_is_rejected_when_autocreate_is_off(self):
+        # explicit since 4.0.0, where the default flipped to True — see issue #8
         with patch_get() as get:
             self.assertIsNone(self.backend.authenticate(None, "ada", "pw"))
         get.assert_not_called()
+
+    def test_the_username_is_matched_case_insensitively(self):
+        """Issue #3: an exact match would authenticate "Ada" against a case-insensitive
+        directory and then provision a second account beside the existing "ada".
+        """
+        user = User.objects.create_user(username="ada")
+        with patch_get(return_value=fake_response({"authenticated": True})):
+            self.assertEqual(self.backend.authenticate(None, "Ada", "pw"), user)
+        self.assertEqual(User.objects.count(), 1)
 
     @override_settings(CHI_AUTH_AUTOCREATE_LOCAL_USER=True)
     def test_unknown_user_is_created_when_autocreate_is_on(self):

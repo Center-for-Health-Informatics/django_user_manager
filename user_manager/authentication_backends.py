@@ -24,7 +24,10 @@ class ChiAuthBackend(BaseBackend):
         if not username or not password:
             return None
         UserModel = get_user_model()
-        oUser = UserModel.objects.filter(username=username).first()
+        # __iexact: the directory behind CHI Auth is case-insensitive, so an exact match
+        # here would authenticate "JSmith" against CHI Auth and then provision a second
+        # local account alongside the existing "jsmith". See checks.py W008.
+        oUser = UserModel.objects.filter(username__iexact=username).first()
 
         # if no user and we’re not autocreating users, can quit here
         if oUser is None and not settings.CHI_AUTH_AUTOCREATE_LOCAL_USER:
@@ -44,6 +47,7 @@ class ChiAuthBackend(BaseBackend):
         # if we’re autocreating and we authenticated a user that doesn’t exist, create them
         remote_user = response.get("user") or {}
         return UserModel.objects.create_user(
+            # CHI Auth's own spelling of the username wins over what was typed at the form
             username=remote_user.get("username", username),
             email=remote_user.get("email", ""),
             first_name=remote_user.get("first_name", ""),

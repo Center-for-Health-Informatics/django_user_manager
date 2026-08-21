@@ -1,11 +1,18 @@
 import os
 from unittest import mock
 
-from django.test import SimpleTestCase, override_settings
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from user_manager import custom_settings
-from user_manager.checks import check_chi_auth_middleware, check_migration_modules
+from user_manager.checks import (
+    check_chi_auth_middleware,
+    check_migration_modules,
+    check_username_case_collisions,
+)
 from user_manager.context_processors import settings_context_processor
+
+User = get_user_model()
 
 SSO_MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -15,29 +22,58 @@ SSO_MIDDLEWARE = [
 
 class GetSettingTests(SimpleTestCase):
     def test_default_is_used_when_nothing_is_configured(self):
-        self.assertEqual(custom_settings.CHI_AUTH_CHECK_SYSTEMS, "local, ucad")
+        # "ucad, local" since 4.0.0 — the order all four deployed consumers set, and it
+        # decides which directory authenticates a password, not just which is asked first
+        self.assertEqual(custom_settings.CHI_AUTH_CHECK_SYSTEMS, "ucad, local")
 
     @override_settings(CHI_AUTH_CHECK_SYSTEMS="local")
     def test_django_setting_wins(self):
         self.assertEqual(custom_settings.CHI_AUTH_CHECK_SYSTEMS, "local")
 
-    def test_environment_is_used_when_there_is_no_django_setting(self):
-        with mock.patch.dict(os.environ, {"CHI_AUTH_CHECK_SYSTEMS": "ucad"}):
-            self.assertEqual(custom_settings.CHI_AUTH_CHECK_SYSTEMS, "ucad")
+    def test_the_environment_is_not_a_configuration_surface(self):
+        """settings.py is the only place a setting comes from, as of 4.0.0 (issue #17).
 
-    @override_settings(CHI_AUTH_CHECK_SYSTEMS="local")
-    def test_django_setting_beats_the_environment(self):
-        with mock.patch.dict(os.environ, {"CHI_AUTH_CHECK_SYSTEMS": "ucad"}):
-            self.assertEqual(custom_settings.CHI_AUTH_CHECK_SYSTEMS, "local")
+        The env fallback let a variable take effect in a deployment while appearing in no
+        settings.py and no example.settings.env — CHI_AUTH_TIMEOUT governed sign-in
+        latency for three services through a surface no repository documented.
+        """
+        for name, raw in [
+            ("CHI_AUTH_CHECK_SYSTEMS", "ucad"),
+            ("CHI_AUTH_TIMEOUT", "30"),
+            ("USER_MANAGER_ABSTRACT_USER_MODEL", "somewhere.else.Model"),
+        ]:
+            with self.subTest(name=name):
+                # compared against the resolved value rather than DEFAULTS, since the test
+                # project sets USER_MANAGER_ABSTRACT_USER_MODEL in its own settings
+                before = getattr(custom_settings, name)
+                with mock.patch.dict(os.environ, {name: raw}):
+                    self.assertEqual(getattr(custom_settings, name), before)
 
-    def test_booleans_from_the_environment(self):
-        for raw, expected in [("TRUE", True), ("true", True), ("1", True), ("no", False)]:
+    def test_booleans_from_a_string_setting_are_parsed_strictly(self):
+        """Matching the env_bool helper in every consumer's settings.py: only 'true'.
+
+        '1' reading as False would be worse than '1' being rejected, because the first
+        kind is only noticed in production — and these booleans decide whether accounts
+        get provisioned.
+        """
+        for raw in ["TRUE", "true", " True "]:
             with self.subTest(raw=raw):
-                with mock.patch.dict(os.environ, {"CHI_AUTH_AUTOCREATE_LOCAL_USER": raw}):
-                    self.assertIs(custom_settings.CHI_AUTH_AUTOCREATE_LOCAL_USER, expected)
+                with override_settings(CHI_AUTH_USE_MIDDLEWARE=raw):
+                    self.assertIs(custom_settings.CHI_AUTH_USE_MIDDLEWARE, True)
+        for raw in ["1", "yes", "on", "no", ""]:
+            with self.subTest(raw=raw):
+                with override_settings(CHI_AUTH_USE_MIDDLEWARE=raw):
+                    self.assertIs(custom_settings.CHI_AUTH_USE_MIDDLEWARE, False)
 
-    @override_settings(CHI_AUTH_AUTOCREATE_LOCAL_USER=True)
+    @override_settings(CHI_AUTH_AUTOCREATE_LOCAL_USER=False)
     def test_real_booleans_pass_through(self):
+        self.assertIs(custom_settings.CHI_AUTH_AUTOCREATE_LOCAL_USER, False)
+
+    def test_autocreate_defaults_on(self):
+        """4.0.0 flipped it False -> True, because the middleware provisioned
+        unconditionally before and header SSO is how everyone arrives. A False default
+        would have turned that into 'provisions no one', silently, on the pin bump.
+        """
         self.assertIs(custom_settings.CHI_AUTH_AUTOCREATE_LOCAL_USER, True)
 
     @override_settings(CHI_AUTH_TIMEOUT="2.5")
@@ -92,7 +128,7 @@ class ChecksTests(SimpleTestCase):
         self.assertIn("user_manager.W001", self.ids(MIDDLEWARE=SSO_MIDDLEWARE))
 
     def test_no_warning_once_trusted_proxies_is_set(self):
-        ids = self.ids(MIDDLEWARE=SSO_MIDDLEWARE, CHI_AUTH_TRUSTED_PROXIES=["10.0.0.1"])
+        ids = self.ids(MIDDLEWARE=SSO_MIDDLEWARE, CHI_AUTH_TRUSTED_PROXIES=["127.0.0.1/32"])
         self.assertNotIn("user_manager.W001", ids)
 
     def test_errors_without_authentication_middleware(self):
@@ -157,3 +193,27 @@ class ChecksTests(SimpleTestCase):
             DEBUG=False,
         )
         self.assertIn("user_manager.W002", ids)
+
+
+class UsernameCaseCollisionCheckTests(TestCase):
+    """W008. Needs the database, so it is a TestCase rather than a SimpleTestCase."""
+
+    def test_silent_when_every_username_is_distinct(self):
+        User.objects.create_user(username="ada")
+        User.objects.create_user(username="grace")
+        self.assertEqual(check_username_case_collisions(None), [])
+
+    def test_reports_a_pair_differing_only_in_case(self):
+        User.objects.create_user(username="ada")
+        User.objects.create_user(username="Ada")
+        messages = check_username_case_collisions(None)
+        self.assertEqual([m.id for m in messages], ["user_manager.W008"])
+        self.assertIn("'ada'", messages[0].msg)
+
+    def test_the_listing_is_capped(self):
+        for n in range(12):
+            User.objects.create_user(username=f"user{n}")
+            User.objects.create_user(username=f"USER{n}")
+        message = check_username_case_collisions(None)[0]
+        self.assertIn("12 username(s)", message.msg)
+        self.assertIn("and 2 more", message.msg)

@@ -5,7 +5,11 @@ by ``manage.py check`` instead of going unnoticed.
 from urllib.parse import urlparse
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.checks import Error, Warning, register
+from django.core.exceptions import ImproperlyConfigured
+from django.db import DatabaseError
+from django.db.models import Count
 
 from . import custom_settings, views
 
@@ -65,8 +69,14 @@ def check_chi_auth_middleware(app_configs, **kwargs):
                     f"client because CHI_AUTH_TRUSTED_PROXIES is empty. Anyone able to "
                     f"reach this server without going through nginx can authenticate as "
                     f"any user by sending an SSO-Username header.",
-                    hint="Set CHI_AUTH_TRUSTED_PROXIES to the address(es) of your nginx "
-                    "server, and make sure nginx strips inbound SSO-* headers.",
+                    hint="First close it at the network: the app server must not be "
+                    "reachable except through nginx — bind the published port to a "
+                    "private address and let the sidecar share the app's network "
+                    "namespace, so gunicorn can bind 127.0.0.1. Then set "
+                    "CHI_AUTH_TRUSTED_PROXIES=127.0.0.1/32 in compose.yaml (not "
+                    "settings.env) to enforce the same thing here. A value broader than "
+                    "/32 readmits the bridge gateway and silences this warning without "
+                    "changing anything.",
                     id="user_manager.W001",
                 )
             )
@@ -148,3 +158,57 @@ def check_chi_auth_middleware(app_configs, **kwargs):
             )
 
     return errors
+
+
+@register("security")
+def check_username_case_collisions(app_configs, **kwargs):
+    """Report usernames that differ only in case.
+
+    Since 4.0.0 both login paths match usernames with ``__iexact`` (issue #3), because the
+    directory behind CHI Auth is case-insensitive and the SSO-Username header carries
+    whatever casing the user typed. Any collision predating that change is now ambiguous:
+    ``filter(username__iexact=…).first()`` picks one of the pair by whatever order the
+    database returns, so a user can land in either account from one sign-in to the next.
+
+    Reported rather than merged. Which row is the real account — and what to do with the
+    permissions, foreign keys and history hanging off the other — is a judgement call per
+    pair, not something a system check may decide.
+    """
+    from django.db.models.functions import Lower
+
+    try:
+        User = get_user_model()
+    except Exception:  # noqa: BLE001 - a broken AUTH_USER_MODEL is another check's job
+        return []
+
+    try:
+        collisions = (
+            User.objects.annotate(folded=Lower("username"))
+            .values("folded")
+            .annotate(n=Count("pk"))
+            .filter(n__gt=1)
+            .order_by("folded")
+        )
+        folded = [row["folded"] for row in collisions]
+    except (DatabaseError, ImproperlyConfigured):
+        # `manage.py check` runs before `migrate`, and on an unmigrated or absent database
+        # there is no table to ask. Nothing to report is the right answer there.
+        return []
+
+    if not folded:
+        return []
+
+    shown = ", ".join(repr(name) for name in folded[:10])
+    if len(folded) > 10:
+        shown += f", and {len(folded) - 10} more"
+
+    return [
+        Warning(
+            f"{len(folded)} username(s) differ from another account only in case: "
+            f"{shown}. Both login paths match case-insensitively, so which account a "
+            f"sign-in reaches is decided by database ordering.",
+            hint="Merge each pair by hand — move whatever references the duplicate, then "
+            "delete it — and keep the spelling the directory returns.",
+            id="user_manager.W008",
+        )
+    ]
