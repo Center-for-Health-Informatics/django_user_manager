@@ -35,7 +35,7 @@ example to copy from.
 Install from GitHub with pip
 
 ```shell
-pip install "user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v4.0.0"
+pip install "user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v4.0.1"
 ```
 
 Check the tag against the latest release — this snippet is hand-maintained and has been
@@ -43,7 +43,7 @@ stale before.
 
 or add to a `requirements.txt` file
 ```
-user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v4.0.0
+user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v4.0.1
 ```
 
 Add `user_manager` app to your installed apps
@@ -382,6 +382,14 @@ is active outside `DEBUG`.
 MIDDLEWARE = [..., "user_manager.middleware.InspectHeadersMiddleware"]
 SPECIAL_LOG_FOLDER = "/var/log/myproject/"
 ```
+
+## Upgrading from 4.0.0 to 4.0.1
+
+- **The sign-in page no longer carries an inline `<style>`.** It came from the shipped
+  `logo.svg`, which `login.html` inlines, and it put one inline style on every consumer's
+  sign-in page — enough to rule out a `Content-Security-Policy` without `'unsafe-inline'`
+  in `style-src`. The rule was a no-op, so nothing changes on screen. No consumer changes
+  needed beyond the pin bump. (#19)
 
 ## Upgrading from 3.2 to 4.0
 
