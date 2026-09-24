@@ -166,8 +166,8 @@ class ChiAuthLoginMiddleware:
         oUser = User.objects.filter(username__iexact=username).first()
         if not oUser:
             if not custom_settings.CHI_AUTH_AUTOCREATE_LOCAL_USER:
-                # the same answer ChiAuthBackend gives on the password path; before 4.0.0
-                # this path provisioned regardless and the setting meant nothing here
+                # before 4.0.0 this path provisioned regardless and the setting meant
+                # nothing here
                 logger.warning(
                     "Refusing SSO login for unknown user %r: CHI_AUTH_AUTOCREATE_LOCAL_USER is off",
                     username,

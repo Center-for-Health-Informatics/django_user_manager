@@ -21,13 +21,6 @@
     <aside>{{ login_error }}</aside>
     {% endif %}
 
-    {% if allow_chi_auth_login %}
-    <ul>
-      <li><label>faculty, staff, students:</label> <span>sign in with your <b>UC</b> credentials</span></li>
-      <li><label>all others:</label> <span>sign in with your <b>CHI</b> credentials</span></li>
-    </ul>
-    {% endif %}
-
     <form action="" method="POST">
       {% csrf_token %}
       <input type="text" name="username" id="user-id" placeholder="Username" autofocus>
@@ -38,10 +31,6 @@
     <footer>
       <h2>Need Help?</h2>
       <ul>
-        {% if allow_chi_auth_login %}
-        <li><a href="{{ UC_PASSWORD_MANAGER_URL }}" target="_blank">Forgot UC Central password</a></li>
-        <li><a href="{{ ACCOUNT_LOOKUP_URL }}">Create CHI account or reset password</a></li>
-        {% endif %}
         <li><a href="mailto:{{ CONTACT_EMAIL }}">Contact CHI</a></li>
       </ul>
     </footer>

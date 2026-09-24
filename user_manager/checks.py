@@ -16,6 +16,9 @@ from . import custom_settings, views
 AUTH_MIDDLEWARE = "django.contrib.auth.middleware.AuthenticationMiddleware"
 CHI_AUTH_MIDDLEWARE = "user_manager.middleware.ChiAuthLoginMiddleware"
 INSPECT_MIDDLEWARE = "user_manager.middleware.InspectHeadersMiddleware"
+REMOVED_BACKEND = "user_manager.authentication_backends.ChiAuthBackend"
+# read only by ChiAuthBackend's call to CHI Auth's api/authenticate, removed in 5.0.0
+REMOVED_SETTINGS = ["CHI_AUTH_API_ACCESS_TOKEN", "CHI_AUTH_CHECK_SYSTEMS", "CHI_AUTH_TIMEOUT"]
 
 
 @register()
@@ -38,6 +41,41 @@ def check_migration_modules(app_configs, **kwargs):
             id="user_manager.W003",
         )
     ]
+
+
+@register()
+def check_removed_in_5(app_configs, **kwargs):
+    """ChiAuthBackend is gone (issue #9): every consumer signs in through header SSO, and
+    the local form authenticates with Django's own ModelBackend.
+
+    Left in AUTHENTICATION_BACKENDS, the dotted path is only imported when someone signs in
+    — so every sign-in, /admin/login/ included, would fail with an ImportError long after
+    the deploy looked healthy. An Error here fails `migrate` instead, and with it the
+    deploy of any entrypoint running under `set -e`.
+    """
+    messages = []
+    if REMOVED_BACKEND in getattr(settings, "AUTHENTICATION_BACKENDS", []):
+        messages.append(
+            Error(
+                f"{REMOVED_BACKEND} was removed in user_manager 5.0.0, but "
+                f"AUTHENTICATION_BACKENDS still lists it. Every sign-in would fail importing it.",
+                hint="Delete it from AUTHENTICATION_BACKENDS. CHI Auth users arrive through "
+                "ChiAuthLoginMiddleware; the local form uses ModelBackend.",
+                id="user_manager.E003",
+            )
+        )
+    leftover = [name for name in REMOVED_SETTINGS if hasattr(settings, name)]
+    if leftover:
+        messages.append(
+            Warning(
+                f"Set, but read by nothing since user_manager 5.0.0 removed "
+                f"ChiAuthBackend: {', '.join(leftover)}.",
+                hint="Delete them from settings.py and from the deployment's settings.env, "
+                "so nothing appears configurable that is not.",
+                id="user_manager.W009",
+            )
+        )
+    return messages
 
 
 @register("security")

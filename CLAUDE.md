@@ -30,10 +30,19 @@ nobody exercises are options nobody tests.
 
 ## Authentication
 
-**Two login paths, and they must agree.** `ChiAuthLoginMiddleware` (header SSO) and
-`ChiAuthBackend` (password) are separate code that answers the same questions — does this
-user exist, may they in, do we create them. Issue #8 was those two drifting apart for
-years. When you change one, check the other.
+**CHI Auth signs people in one way: header SSO.** `ChiAuthLoginMiddleware` is the only
+code that decides whether a CHI Auth user exists here, may come in, or gets created.
+Until 5.0.0 `ChiAuthBackend` answered the same questions on a password path, and issue #8
+was the two drifting apart for years. No deployment used the backend, so #9 deleted it
+rather than keep reconciling them. Don't bring a second path back without a consumer that
+needs it.
+
+**The local form stays, for local accounts.** With `CHI_AUTH_USE_MIDDLEWARE` off — the
+package default, and how daedalus and monitor run in development — `login_view` renders
+`login.html` and authenticates through Django's `ModelBackend`. `/admin/login/` uses the
+same backend, and it is the documented way in for a local superuser. `user_manager.E003`
+catches a consumer still listing the removed backend, because that fails at sign-in, not
+at startup.
 
 **Usernames match with `__iexact`, and the stored spelling is never rewritten.** The
 directory behind CHI Auth is case-insensitive and the `SSO-Username` header carries
