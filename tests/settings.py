@@ -35,7 +35,6 @@ MIDDLEWARE = [
 
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
-    "user_manager.authentication_backends.ChiAuthBackend",
 ]
 
 ROOT_URLCONF = "tests.urls"

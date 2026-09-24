@@ -19,23 +19,21 @@ boundary is — so pick it first and read the matching section below.
 | what secures it | **the network** — see “Header based SSO” | Django’s own session and CSRF handling |
 | used by | every CHI deployment | development, and non-CHI deployments |
 
-Within local login, `AUTHENTICATION_BACKENDS` decides *which* credentials the form accepts:
-Django’s `ModelBackend` alone for local passwords only, plus `ChiAuthBackend` to accept UC
-or CHI credentials as well. `CHI_AUTH_CHECK_SYSTEMS` then narrows that further — set it to
-`"local"` to accept CHI accounts while leaving UC Active Directory out of it entirely.
+Local login accepts **local accounts only**, through Django’s own `ModelBackend`. UC and CHI
+credentials are CHI Auth’s to check, on its own page, under header SSO. Until 5.0.0 a
+`ChiAuthBackend` let the local form accept them too; no deployment used it (issue #9).
 
 Supports Django 6.0 and 6.1 on Python 3.12+.
 
-Projects using it: daedalus, ocr_importer, monitor, neurords, rap_subsystem, fcc_tracker,
-email_service, covidicus. Daedalus is the most recently updated and is the best worked
-example to copy from.
+Projects using it: daedalus, email_service and monitor, all deployed on chi-cetus.
+email_service is the best worked example to copy from.
 
 ## Setup
 
 Install from GitHub with pip
 
 ```shell
-pip install "user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v4.0.1"
+pip install "user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v5.0.0"
 ```
 
 Check the tag against the latest release — this snippet is hand-maintained and has been
@@ -43,7 +41,7 @@ stale before.
 
 or add to a `requirements.txt` file
 ```
-user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v4.0.1
+user_manager @ git+https://github.com/Center-for-Health-Informatics/django_user_manager.git@v5.0.0
 ```
 
 Add `user_manager` app to your installed apps
@@ -60,17 +58,9 @@ Set the user manager model as your User model
 AUTH_USER_MODEL = "user_manager.User"
 ```
 
-Select the authentication backends you want to use
-```python
-# select auth backends to use when authenticating inside the app for development
-# the following will first try local authentication, then try CHI Auth authentication
-# checking both CHI Accounts and UC AD Accounts. On successful CHI Auth authentication,
-# the local user will be created if they don’t exist yet.
-AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.ModelBackend",
-    "user_manager.authentication_backends.ChiAuthBackend",
-]
-```
+Leave `AUTHENTICATION_BACKENDS` at Django’s default, `ModelBackend`. It is what the local
+form and `/admin/login/` authenticate against. Listing the removed
+`user_manager.authentication_backends.ChiAuthBackend` is `user_manager.E003`.
 
 Define an abstract user
 - `user_manager` uses this as the base to build its concrete `User` model, so this is where you add any custom fields or methods.
@@ -86,7 +76,7 @@ class AbstractCustomUser(AbstractUser):
         abstract = True
 ```
 
-Register the context processor, so the login page can see `SITE_TITLE`, `CONTACT_EMAIL` and the CHI Auth help links. Without this the login page still renders, but with those values blank.
+Register the context processor, so the login page can see `SITE_TITLE`, `CONTACT_EMAIL` and `ASSETS_URL`. Without this the login page still renders, but with those values blank.
 
 ```python
 TEMPLATES = [
@@ -119,21 +109,9 @@ environment itself, the same way it does for everything else it configures, so t
 # user_manager.W007.
 CHI_AUTH_URL = "/auth/"
 
-# you need to provide an access token if using CHI_Auth
-CHI_AUTH_API_ACCESS_TOKEN = "🤫"
-
-# Which CHI_AUTH systems do you want to use for authentication, in order?
-# ucad is UC Active Directory, local is CHI_AUTH credentials for non-UC users.
-# The order decides which one authenticates a password when an account exists in both,
-# not merely which is asked first. Set it to "local" to turn UC AD off altogether.
-CHI_AUTH_CHECK_SYSTEMS = 'ucad, local'
-
-# Provision a local account for someone CHI_AUTH authenticates but this app has never
-# seen? Applies to both login paths. Defaults True; set False for closed provisioning.
+# Provision a local account for someone CHI_AUTH signs in but this app has never seen?
+# Read by the header SSO middleware. Defaults True; set False for closed provisioning.
 CHI_AUTH_AUTOCREATE_LOCAL_USER = True
-
-# seconds to wait on any call out to CHI Auth before giving up and failing the login
-CHI_AUTH_TIMEOUT = 5
 ```
 
 Set login/logout paths. These are the same in both modes — under header SSO the login view
@@ -160,9 +138,6 @@ SITE_TITLE = "Center for Health Informatics"
 
 # who to email for help
 CONTACT_EMAIL = "combmichi@uc.edu"
-
-# where to change a UC password
-UC_PASSWORD_MANAGER_URL = "https://www.uc.edu/sspr"
 
 # base URL of the shared CHI asset library, trailing slash included — the sign-in
 # page links its stylesheet and favicon from here. Set it to "/assets/" where the
@@ -382,6 +357,29 @@ is active outside `DEBUG`.
 MIDDLEWARE = [..., "user_manager.middleware.InspectHeadersMiddleware"]
 SPECIAL_LOG_FOLDER = "/var/log/myproject/"
 ```
+
+## Upgrading from 4.0 to 5.0
+
+**`ChiAuthBackend` is gone** (#9). It let the local sign-in form accept UC and CHI
+credentials by calling CHI Auth’s `api/authenticate`. Every consumer signs CHI users in
+through header SSO instead, so in production it authenticated no one. The local form stays,
+for local accounts through `ModelBackend` — which is how development signs in, and what
+`/admin/login/` uses.
+
+In each consumer, in the same change as the pin bump:
+
+- **Delete `"user_manager.authentication_backends.ChiAuthBackend"` from
+  `AUTHENTICATION_BACKENDS`.** Left in, every sign-in fails importing it, so
+  `user_manager.E003` makes `manage.py check` — and `migrate` — fail instead. That stops the
+  deploy only where the entrypoint runs under `set -e`; email_service’s does not today, so
+  check it by hand there.
+- **Delete `CHI_AUTH_API_ACCESS_TOKEN`, `CHI_AUTH_CHECK_SYSTEMS` and `CHI_AUTH_TIMEOUT`**
+  from `settings.py`, `example.settings.env` and the deployed `settings.env`. Nothing reads
+  them now; `user_manager.W009` names any still set.
+- `UC_PASSWORD_MANAGER_URL` and the `ACCOUNT_LOOKUP_URL` / `allow_chi_auth_login` context
+  variables are gone with it. No consumer template used them.
+
+A consumer still on 3.2 takes the 4.0 notes below as well.
 
 ## Upgrading from 4.0.0 to 4.0.1
 

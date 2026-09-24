@@ -50,29 +50,16 @@ DEFAULTS = {
     # not span domains: the cookie and the SSO-* headers are per-domain. See checks.py
     # W007, which warns when this names a host.
     "CHI_AUTH_URL": "/auth/",
-    # you need to provide an access token if using CHI_Auth
-    "CHI_AUTH_API_ACCESS_TOKEN": "",
-    # seconds to wait on any call out to CHI Auth before giving up
-    "CHI_AUTH_TIMEOUT": 5,
     # Provision a local account for a user CHI Auth authenticates but this app has never
-    # seen? True on both login paths — the header SSO middleware and ChiAuthBackend.
+    # seen? Read by the header SSO middleware, the only path CHI Auth signs anyone in by
+    # since 5.0.0 removed ChiAuthBackend.
     #
     # Defaults True because that is what every deployment already does: before 4.0.0 the
     # middleware provisioned unconditionally and never consulted this setting (issue #8),
     # and header SSO is how everyone arrives. A default of False would have turned that
     # into "provisions no one" on the pin bump, silently, for every consumer that had
-    # never set it. A deployment that genuinely wants closed provisioning sets False and
-    # gets it on both paths.
+    # never set it. A deployment that genuinely wants closed provisioning sets False.
     "CHI_AUTH_AUTOCREATE_LOCAL_USER": True,
-    # what credentials should be accepted from CHI Auth? (comma separated string)
-    # local: user account in CHI Auth
-    # ucad: user account in UC Active Directory (only works if server is on UC network)
-    #
-    # The order is not merely which directory is asked first — it decides which one
-    # authenticates a password when an account exists in both. "ucad, local" is what all
-    # four deployed consumers set, so it is the default rather than something each of
-    # them restates.
-    "CHI_AUTH_CHECK_SYSTEMS": "ucad, local",
     # is header SSO in use — an upstream nginx authenticating against CHI Auth and passing
     # identity as SSO-* headers for ChiAuthLoginMiddleware to read? The project is what
     # installs the middleware; this is how the rest of the package knows it did. login_view
@@ -92,7 +79,6 @@ DEFAULTS = {
     "USER_MANAGER_ABSTRACT_USER_MODEL": "project.abstract_user_model.AbstractCustomUser",
     "SITE_TITLE": "Center for Health Informatics",
     "CONTACT_EMAIL": "combmichi@uc.edu",
-    "UC_PASSWORD_MANAGER_URL": "https://www.uc.edu/sspr",
     # Base URL of the shared CHI asset library, trailing slash included; the sign-in
     # template links its stylesheet and favicon from here. Absolute by default so an
     # existing consumer that says nothing keeps the styling it has, but overridable —
@@ -103,7 +89,6 @@ DEFAULTS = {
 
 # settings that need converting when a project supplies them as a string
 CASTS = {
-    "CHI_AUTH_TIMEOUT": float,
     "CHI_AUTH_AUTOCREATE_LOCAL_USER": _to_bool,
     "CHI_AUTH_USE_MIDDLEWARE": _to_bool,
     "CHI_AUTH_TRUSTED_PROXIES": _to_list,

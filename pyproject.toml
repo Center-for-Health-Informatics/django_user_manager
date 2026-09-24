@@ -36,7 +36,6 @@ dependencies = [
     # is one release of slack, not a version anyone runs. 5.2 was dropped in 4.0.0 —
     # it was never exercised by any deployment and kept the Python floor at 3.10.
     "Django>=6.0,<7",
-    "requests",
 ]
 
 [project.urls]
