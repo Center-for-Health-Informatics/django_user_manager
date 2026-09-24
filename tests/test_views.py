@@ -1,3 +1,4 @@
+import re
 from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
@@ -17,6 +18,16 @@ class LoginViewTests(TestCase):
         response = self.client.get(LOGIN_URL)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "user_manager/login.html")
+
+    def test_login_page_has_no_inline_style_or_script(self):
+        """The page ships into every consumer, so one inline site forces 'unsafe-inline'
+        into all of their CSPs. That includes the logo partial, which is {% include %}d
+        (#19; chi-platform's no-inline-style-or-script check)."""
+        html = self.client.get(LOGIN_URL).content.decode()
+        inline = re.compile(
+            r"<style|\s(?:style|on[a-z]+)=[\"']|<script(?![^>]*\ssrc=)", re.IGNORECASE
+        )
+        self.assertEqual([m.group(0) for m in inline.finditer(html)], [])
 
     def test_successful_login_redirects_to_login_redirect_url(self):
         response = self.client.post(LOGIN_URL, {"username": "ada", "password": "hunter2"})

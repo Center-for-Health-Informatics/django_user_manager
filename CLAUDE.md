@@ -77,6 +77,14 @@ crafted `next` cannot smuggle a second `uri` to the next hop.
 **`default_auto_field` stays `AutoField`.** The one place the estate departs from
 `conventions.md`'s `BigAutoField` rule, deliberately — see the comment in `apps.py`.
 
+## Templates
+
+**No inline styles or scripts — the logo included.** `login.html` is rendered by every
+consumer, so a single `<style>`, `style=`, `on*=` or `<script>` without `src` in it forces
+`'unsafe-inline'` into all of their CSPs. That includes `logo.svg`, which is
+`{% include %}`d rather than linked. `test_login_page_has_no_inline_style_or_script` and
+chi-platform's `no-inline-style-or-script` check both enforce it (#19).
+
 ## Tests
 
 `python runtests.py` — the suite runs standalone, with no host project. `tests/settings.py`
